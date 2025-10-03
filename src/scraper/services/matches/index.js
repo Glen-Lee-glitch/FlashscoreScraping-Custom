@@ -4,12 +4,16 @@ import { openPageAndNavigate, waitAndClick, waitForSelectorSafe } from '../../in
 export const getMatchIdList = async (browser, leagueSeasonUrl) => {
   const page = await openPageAndNavigate(browser, `${leagueSeasonUrl}/results`);
 
-  while (true) {
-    try {
-      await waitAndClick(page, 'a.event__more.event__more--static');
-    } catch (error) {
-      break;
-    }
+  // "더 보기" 버튼을 한 번만 클릭
+  try {
+    console.log('🔍 "더 보기" 버튼 찾는 중...');
+    await waitAndClick(page, 'a[data-testid="wcl-buttonLink"] span[data-testid="wcl-scores-caption-05"]');
+    console.log('✅ "더 보기" 버튼 클릭 성공');
+    
+    // 클릭 후 로딩 대기
+    await new Promise(resolve => setTimeout(resolve, 3000));
+  } catch (error) {
+    console.log('ℹ️ "더 보기" 버튼이 없거나 클릭 실패:', error.message);
   }
 
   await waitForSelectorSafe(page, '.event__match.event__match--static.event__match--twoLine');
@@ -24,36 +28,124 @@ export const getMatchIdList = async (browser, leagueSeasonUrl) => {
   return matchIdList;
 };
 
-export const getMatchData = async (browser, matchId) => {
-  const page = await openPageAndNavigate(browser, `${BASE_URL}/match/${matchId}/#/match-summary/match-summary`);
-
-  await waitForSelectorSafe(page, '.duelParticipant__startTime');
-  await waitForSelectorSafe(page, "div[data-testid='wcl-summaryMatchInformation'] > div'");
-
-  const matchData = await extractMatchData(page);
-  const information = await extractMatchInformation(page);
-
-  await page.goto(`${BASE_URL}/match/${matchId}/#/match-summary/match-statistics/0`, { waitUntil: 'domcontentloaded' });
-  await waitForSelectorSafe(page, "div[data-testid='wcl-statistics']");
-  const statistics = await extractMatchStatistics(page);
-
-  await page.close();
-  return { ...matchData, information, statistics };
+// 재시도 로직을 위한 헬퍼 함수
+const retryWithDelay = async (fn, maxRetries = 3, delayMs = 2000) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      console.log(`🔄 시도 ${attempt}/${maxRetries} 실패: ${error.message}`);
+      
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      console.log(`⏳ ${delayMs}ms 후 재시도...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
 };
 
-const extractMatchData = async (page) => {
-  return await page.evaluate(async () => {
+export const getMatchData = async (browser, matchId) => {
+  return await retryWithDelay(async () => {
+    const page = await openPageAndNavigate(browser, `${BASE_URL}/match/${matchId}/#/match-summary/match-summary`);
+
+    await waitForSelectorSafe(page, '.duelParticipant__startTime');
+
+    // 현재 URL에서 팀 ID 추출
+    const pageUrl = page.url();
+    const teamIds = extractTeamIdsFromUrl(pageUrl);
+
+    const matchData = await extractMatchData(page, teamIds);
+
+    // 통계 페이지 로딩 재시도
+    await retryWithDelay(async () => {
+      await page.goto(`${BASE_URL}/match/${matchId}/#/match-summary/match-statistics/0`, { 
+        waitUntil: 'domcontentloaded',
+        timeout: 20000 
+      });
+      await waitForSelectorSafe(page, "div[data-testid='wcl-statistics']", 10000);
+    }, 2, 1000);
+
+    const statistics = await extractMatchStatistics(page);
+
+    // 현재 페이지 URL에서 전체 경로 추출 (배당률용)
+    const matchPathMatch = pageUrl.match(/\/match\/([^#?]+)/);
+    const fullMatchPath = matchPathMatch ? matchPathMatch[1].replace(/\/$/, '') : matchId;
+
+    // 배당률 페이지로 이동
+    const odds = {};
+    
+    // Over/Under 배당률 수집 (재시도 로직 포함)
+    try {
+      const oddsUrl = `${BASE_URL}/match/${fullMatchPath}/odds/over-under/full-time/`;
+      console.log(`[ODDS] Trying: ${oddsUrl}`);
+      
+      await retryWithDelay(async () => {
+        await page.goto(oddsUrl, { waitUntil: 'networkidle2', timeout: 20000 });
+        // 페이지 로딩 후 약간 대기
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }, 2, 1500);
+      
+      const pageCheck = await page.evaluate(() => {
+        return {
+          hasOddsTable: document.querySelectorAll('.ui-table__row').length,
+          bodyText: document.body.innerText.substring(0, 200),
+          hasError: document.body.innerText.includes('에러') || document.body.innerText.includes('Error'),
+        };
+      });
+      
+      console.log(`[ODDS] Rows found: ${pageCheck.hasOddsTable}, Has error: ${pageCheck.hasError}`);
+      
+      if (pageCheck.hasOddsTable > 0) {
+        const overUnderOdds = await extractMatchOdds(page);
+        if (overUnderOdds) {
+          odds['over-under'] = overUnderOdds;
+          console.log(`[ODDS] Extracted ${overUnderOdds.length} over-under handicap lines`);
+        }
+      } else if (pageCheck.hasError) {
+        console.log(`[ODDS] Error page detected: ${pageCheck.bodyText}`);
+      }
+    } catch (error) {
+      console.log(`[ODDS] Failed for ${matchId}: ${error.message}`);
+    }
+
+    // 페이지 닫기 재시도
+    try {
+      await page.close();
+    } catch (closeError) {
+      console.log(`⚠️ 페이지 닫기 실패 (무시): ${closeError.message}`);
+    }
+
+    return { ...matchData, statistics, odds: Object.keys(odds).length > 0 ? odds : null };
+  }, 2, 3000); // 최대 2회 재시도, 3초 대기
+};
+
+const extractTeamIdsFromUrl = (url) => {
+  // URL 패턴: /match/soccer/team1-slug-TEAM1ID/team2-slug-TEAM2ID/
+  const match = url.match(/\/match\/[^\/]+\/[^\/]+-([^\/]+)\/[^\/]+-([^\/]+)/);
+  
+  if (match) {
+    return {
+      home: match[2], // 두 번째 팀 (URL에서 뒤에 나오는 팀이 홈팀)
+      away: match[1], // 첫 번째 팀 (URL에서 앞에 나오는 팀이 원정팀)
+    };
+  }
+  
+  return { home: null, away: null };
+};
+
+const extractMatchData = async (page, teamIds) => {
+  const basicData = await page.evaluate(async () => {
     return {
       stage: document.querySelector('.tournamentHeader__country > a')?.innerText.trim(),
       date: document.querySelector('.duelParticipant__startTime')?.innerText.trim(),
       status: document.querySelector('.fixedHeaderDuel__detailStatus')?.innerText.trim(),
       home: {
         name: document.querySelector('.duelParticipant__home .participant__participantName.participant__overflow')?.innerText.trim(),
-        image: document.querySelector('.duelParticipant__home .participant__image')?.src,
       },
       away: {
         name: document.querySelector('.duelParticipant__away .participant__participantName.participant__overflow')?.innerText.trim(),
-        image: document.querySelector('.duelParticipant__away .participant__image')?.src,
       },
       result: {
         home: Array.from(document.querySelectorAll('.detailScore__wrapper span:not(.detailScore__divider)'))?.[0]?.innerText.trim(),
@@ -69,6 +161,12 @@ const extractMatchData = async (page) => {
       },
     };
   });
+  
+  // 팀 ID 추가
+  if (teamIds.home) basicData.home.id = teamIds.home;
+  if (teamIds.away) basicData.away.id = teamIds.away;
+  
+  return basicData;
 };
 
 const extractMatchInformation = async (page) => {
@@ -99,5 +197,89 @@ const extractMatchStatistics = async (page) => {
       homeValue: Array.from(element.querySelectorAll("div[data-testid='wcl-statistics-value'] > strong"))?.[0]?.innerText.trim(),
       awayValue: Array.from(element.querySelectorAll("div[data-testid='wcl-statistics-value'] > strong"))?.[1]?.innerText.trim(),
     }));
+  });
+};
+
+const extractMatchOdds = async (page) => {
+  return await page.evaluate(async () => {
+    const oddsRows = Array.from(document.querySelectorAll('.ui-table__row'));
+    
+    if (oddsRows.length === 0) {
+      return null;
+    }
+
+    // 기준점별로 배당률을 그룹화
+    const oddsDataByHandicap = {};
+
+    oddsRows.forEach((row) => {
+      try {
+        // 북메이커명 추출
+        const bookmakerImg = row.querySelector('.oddsCell__bookmaker img, .prematchLogo');
+        const bookmakerName = bookmakerImg?.getAttribute('title') || bookmakerImg?.getAttribute('alt') || 'Unknown';
+
+        // 기준점 추출
+        const handicapElement = row.querySelector('span[data-testid="wcl-oddsValue"]');
+        const handicap = handicapElement?.innerText.trim() || null;
+
+        if (!handicap) return;
+
+        // Over/Under 배당률 추출
+        const oddsCells = Array.from(row.querySelectorAll('a.oddsCell__odd'));
+        
+        // span 태그에서 텍스트 추출
+        let overOdds = null;
+        let underOdds = null;
+        
+        if (oddsCells.length >= 2) {
+          const overSpan = oddsCells[0]?.querySelector('span:not(.arrow):not(.externalLink-ico)');
+          const underSpan = oddsCells[1]?.querySelector('span:not(.arrow):not(.externalLink-ico)');
+          
+          overOdds = overSpan?.innerText.trim() || oddsCells[0]?.innerText.trim().split('\n')[0] || null;
+          underOdds = underSpan?.innerText.trim() || oddsCells[1]?.innerText.trim().split('\n')[0] || null;
+        }
+
+        if (!overOdds && !underOdds) return;
+
+        // 기준점별로 그룹화
+        if (!oddsDataByHandicap[handicap]) {
+          oddsDataByHandicap[handicap] = [];
+        }
+
+        oddsDataByHandicap[handicap].push({
+          bookmaker: bookmakerName,
+          over: overOdds,
+          under: underOdds,
+        });
+      } catch (error) {
+        // 개별 row 파싱 실패는 무시
+      }
+    });
+
+    // 각 기준점별로 평균 계산
+    const oddsData = Object.keys(oddsDataByHandicap).map((handicap) => {
+      const bookmakerOdds = oddsDataByHandicap[handicap];
+      
+      // 평균 계산
+      const validOverOdds = bookmakerOdds.map(b => parseFloat(b.over)).filter(v => !isNaN(v));
+      const validUnderOdds = bookmakerOdds.map(b => parseFloat(b.under)).filter(v => !isNaN(v));
+      
+      const averageOver = validOverOdds.length > 0 
+        ? (validOverOdds.reduce((a, b) => a + b, 0) / validOverOdds.length).toFixed(2)
+        : null;
+      const averageUnder = validUnderOdds.length > 0
+        ? (validUnderOdds.reduce((a, b) => a + b, 0) / validUnderOdds.length).toFixed(2)
+        : null;
+
+      return {
+        handicap: handicap,
+        average: {
+          over: averageOver,
+          under: averageUnder,
+        },
+        bookmakers: bookmakerOdds,
+      };
+    });
+
+    return oddsData.length > 0 ? oddsData : null;
   });
 };

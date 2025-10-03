@@ -80,29 +80,60 @@ When scraping match data, you’ll receive detailed information about each match
     "status": "FINISHED",
     "home": {
       "name": "Cruzeiro",
-      "image": "https://static.flashscore.com/res/image/data/lCWrxmg5-SjJmyx86.png"
+      "id": "lCWrxmg5"
     },
     "away": {
       "name": "Atletico-MG",
-      "image": "https://static.flashscore.com/res/image/data/WbSJHDh5-pCk2vaSD.png"
+      "id": "WbSJHDh5"
     },
     "result": {
       "home": "0",
       "away": "2"
     },
-    "information": [
-      {
-        "category": "Referee",
-        "value": "Fernandes de Lima F. (Bra)"
-      }
-    ],
     "statistics": [
       {
         "category": "Ball Possession",
         "homeValue": "42%",
         "awayValue": "58%"
       }
-    ]
+    ],
+    "odds": {
+      "over-under": [
+        {
+          "handicap": "2.5",
+          "average": {
+            "over": "1.85",
+            "under": "1.95"
+          },
+          "bookmakers": [
+            {
+              "bookmaker": "1xBet",
+              "over": "1.83",
+              "under": "1.97"
+            },
+            {
+              "bookmaker": "Bet365",
+              "over": "1.87",
+              "under": "1.93"
+            }
+          ]
+        },
+        {
+          "handicap": "3.5",
+          "average": {
+            "over": "2.75",
+            "under": "1.44"
+          },
+          "bookmakers": [
+            {
+              "bookmaker": "1xBet",
+              "over": "2.70",
+              "under": "1.46"
+            }
+          ]
+        }
+      ]
+    }
   }
 }
 ```
@@ -120,7 +151,7 @@ When scraping match data, you’ll receive detailed information about each match
    An object representing the team, containing:
 
    - `name`: The team's name.
-   - `image`: The URL to the team's logo.
+   - `id`: The team's unique identifier (used in Flashscore URLs).
 
 1. Result
 
@@ -139,12 +170,21 @@ When scraping match data, you’ll receive detailed information about each match
    - `homeValue`: The statistic value for the home team.
    - `awayValue`: The statistic value for the away team.
 
-1. Information
+1. Odds
 
-   An array of additional match information, including categories such as referee, stadium, and more.
+   Betting odds data for the match, organized by market type:
 
-   - `category`: The category of information (e.g., "Referee").
-   - `value`: The corresponding value for that category (e.g., "Fernandes de Lima F. (Bra)").
+   - `over-under`: Over/Under betting odds (Full Time). An array of handicap lines, each containing:
+     - `handicap`: The goal line (e.g., "2.5", "3.5")
+     - `average`: Average odds across all bookmakers for this handicap
+       - `over`: Average odds for over the handicap
+       - `under`: Average odds for under the handicap
+     - `bookmakers`: Array of individual bookmaker odds with the same structure
+       - `bookmaker`: Name of the bookmaker (e.g., "1xBet", "Bet365")
+       - `over`: Odds for over
+       - `under`: Odds for under
+
+   Note: Odds may be `null` if not available for a particular match. Additional market types (1X2, handicap, etc.) can be added in the future.
 
 ---
 

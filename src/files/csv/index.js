@@ -21,13 +21,9 @@ export const writeCsvToFile = (data, outputPath, fileName) => {
 
 const convertDataToCsv = (data) =>
   Object.keys(data).map((matchId) => {
-    const { stage, date, status, home, away, result, information, statistics } = data[matchId];
-    const informationObject = {};
+    const { stage, date, status, home, away, result, statistics, odds } = data[matchId];
     const statisticsObject = {};
-
-    information.forEach((info) => {
-      informationObject[info.category.toLowerCase().replace(/ /g, '_')] = info.value;
-    });
+    const oddsObject = {};
 
     statistics.forEach((stat) => {
       statisticsObject[stat.category.toLowerCase().replace(/ /g, '_')] = {
@@ -36,5 +32,15 @@ const convertDataToCsv = (data) =>
       };
     });
 
-    return { matchId, stage, status, date, home, away, result, ...informationObject, ...statisticsObject };
+    if (odds && odds['over-under'] && Array.isArray(odds['over-under'])) {
+      // 가장 일반적인 기준점(첫 번째)의 평균 배당률만 CSV에 포함
+      const mainOdds = odds['over-under'][0];
+      if (mainOdds) {
+        oddsObject.odds_over_under_handicap = mainOdds.handicap;
+        oddsObject.odds_over_under_over = mainOdds.average.over;
+        oddsObject.odds_over_under_under = mainOdds.average.under;
+      }
+    }
+
+    return { matchId, stage, status, date, home, away, result, ...statisticsObject, ...oddsObject };
   });
