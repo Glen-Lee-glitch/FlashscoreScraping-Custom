@@ -15,6 +15,40 @@ import { initializeProgressbar } from './cli/progressbar/index.js';
 import { getMatchIdList, getMatchData } from './scraper/services/matches/index.js';
 
 import { handleFileType } from './files/handle/index.js';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+
+// 강력한 브라우저 종료 함수
+const forceKillBrowser = async (browser) => {
+  try {
+    console.log('🔍 모든 페이지 강제 종료 중...');
+    // 모든 페이지 강제 종료
+    const pages = await browser.pages();
+    await Promise.all(pages.map(page => page.close().catch(() => {})));
+    
+    console.log('🔍 브라우저 종료 중...');
+    // 브라우저 종료
+    await browser.close();
+    
+    console.log('🔍 프로세스 완전 종료 대기 중...');
+    // 프로세스 완전 종료 대기
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    console.log('🔍 남은 Chrome 프로세스 강제 종료 중...');
+    // 남은 Chrome 프로세스 강제 종료
+    try {
+      await execAsync('pkill -f chrome || pkill -f chromium || true');
+    } catch (e) {
+      console.log('ℹ️ pkill 명령어 실행 중 에러 (무시):', e.message);
+    }
+    
+    console.log('✅ 브라우저 강제 종료 완료');
+  } catch (error) {
+    console.log(`⚠️ 브라우저 강제 종료 중 에러: ${error.message}`);
+  }
+};
 
 (async () => {
   const options = parseArguments();
@@ -95,10 +129,15 @@ import { handleFileType } from './files/handle/index.js';
       '--no-zygote',
       '--disable-background-timer-throttling',
       '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding'
+      '--disable-renderer-backgrounding',
+      '--disable-extensions',
+      '--disable-plugins',
+      '--disable-images',
+      '--disable-javascript',
+      '--max_old_space_size=256'
     ],
-    protocolTimeout: 60000,
-    timeout: 60000
+    protocolTimeout: 120000, // 120초 타임아웃
+    timeout: 120000
   });
 
   // 직접 URL 구성
@@ -124,8 +163,8 @@ import { handleFileType } from './files/handle/index.js';
   const progressbar = initializeProgressbar(matchIdList.length);
 
   const matchData = {};
-  const BATCH_SIZE = 20; // 20개마다 브라우저 재시작 (40 → 20)
-  const REST_TIME = 30000; // 30초 휴식 (20초 → 30초)
+  const BATCH_SIZE = 10; // 10개마다 브라우저 재시작 (20 → 10)
+  const REST_TIME = 45000; // 45초 휴식 (30초 → 45초)
 
   let currentIndex = 0;
   let browserRestartCount = 0;
@@ -151,23 +190,19 @@ import { handleFileType } from './files/handle/index.js';
   while (currentIndex < matchIdList.length) {
     const matchId = matchIdList[currentIndex];
     
-    // 20개마다 브라우저 재시작
+    // 10개마다 브라우저 재시작
     if (currentIndex > 0 && currentIndex % BATCH_SIZE === 0) {
       console.log(`\n\n⏸️  ${currentIndex}개 매치 처리 완료. 브라우저 재시작 중...`);
       
-      // 강제 종료
-      try {
-        await browser.close();
-      } catch (closeError) {
-        console.log(`⚠️ 브라우저 닫기 실패, 강제 종료: ${closeError.message}`);
-      }
+      // 강력한 브라우저 종료
+      await forceKillBrowser(browser);
       
-      console.log(`💤 30초 휴식 중...`);
+      console.log(`💤 45초 휴식 중...`);
       await new Promise(resolve => setTimeout(resolve, REST_TIME));
       
       console.log(`🔄 브라우저 재시작...\n`);
       browser = await puppeteer.launch({ 
-        headless: options.headless,
+        headless: options.headless !== false,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -175,10 +210,20 @@ import { handleFileType } from './files/handle/index.js';
           '--disable-gpu',
           '--disable-web-security',
           '--disable-features=VizDisplayCompositor',
-          '--memory-pressure-off'
+          '--memory-pressure-off',
+          '--single-process',
+          '--no-zygote',
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
+          '--disable-extensions',
+          '--disable-plugins',
+          '--disable-images',
+          '--disable-javascript',
+          '--max_old_space_size=256'
         ],
-        protocolTimeout: 60000, // 60초 타임아웃
-        timeout: 60000
+        protocolTimeout: 120000, // 120초 타임아웃
+        timeout: 120000
       });
       browserRestartCount++;
     }
@@ -210,27 +255,25 @@ import { handleFileType } from './files/handle/index.js';
     } catch (error) {
       console.error(`\n❌ 매치 ${matchId} 처리 실패: ${error.message}`);
       
-      // 심각한 에러인 경우 즉시 브라우저 재시작
+      // 심각한 에러인 경우 강력한 브라우저 재시작
       if (error.message.includes('Target.closeTarget') || 
           error.message.includes('Navigation timeout') ||
           error.message.includes('Target.createTarget') ||
-          error.message.includes('Protocol error')) {
+          error.message.includes('Protocol error') ||
+          error.message.includes('Network.enable')) {
         
-        console.log(`🚨 브라우저 상태 문제 감지. 즉시 재시작...`);
+        console.log(`🚨 브라우저 상태 문제 감지. 강력한 재시작...`);
         browserRestartCount++;
         
-        try {
-          await browser.close();
-        } catch (closeError) {
-          console.log(`⚠️ 브라우저 닫기 실패 (무시): ${closeError.message}`);
-        }
+        // 강력한 브라우저 종료
+        await forceKillBrowser(browser);
         
-        console.log(`💤 30초 휴식 후 브라우저 재시작...`);
-        await new Promise(resolve => setTimeout(resolve, 30000));
+        console.log(`💤 60초 휴식 후 브라우저 재시작...`);
+        await new Promise(resolve => setTimeout(resolve, 60000));
         
         console.log(`🔄 브라우저 재시작 (${browserRestartCount}번째)...`);
         browser = await puppeteer.launch({ 
-          headless: options.headless,
+          headless: options.headless !== false,
           args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -238,10 +281,20 @@ import { handleFileType } from './files/handle/index.js';
             '--disable-gpu',
             '--disable-web-security',
             '--disable-features=VizDisplayCompositor',
-            '--memory-pressure-off'
+            '--memory-pressure-off',
+            '--single-process',
+            '--no-zygote',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-extensions',
+            '--disable-plugins',
+            '--disable-images',
+            '--disable-javascript',
+            '--max_old_space_size=256'
           ],
-          protocolTimeout: 60000, // 60초 타임아웃
-          timeout: 60000
+          protocolTimeout: 120000, // 120초 타임아웃
+          timeout: 120000
         });
         
         console.log(`📍 인덱스 ${currentIndex}부터 재개...`);
