@@ -57,11 +57,23 @@ import { handleFileType } from './files/handle/index.js';
     'ligue-1': 'ligue-1'
   };
 
+  // 현재 연도 기반으로 최신 시즌 계산
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1; // 1-12
+  
+  // 8월 이후면 현재년도-다음년도, 그 전이면 이전년도-현재년도
+  let latestSeason;
+  if (currentMonth >= 8) {
+    latestSeason = `${currentYear}-${currentYear + 1}`;
+  } else {
+    latestSeason = `${currentYear - 1}-${currentYear}`;
+  }
+
   // 명령행 인수에서 값 추출
   const countryCode = countryMapping[argsMap.country] || 'germany';
   const leagueCode = leagueMapping[argsMap.league] || '2-bundesliga';
   const fileType = argsMap.fileType || 'json';
-  const seasonYear = argsMap.season || '2024-2025';
+  const seasonYear = argsMap.season || latestSeason;
 
   console.log(`🎯 실행 설정:`);
   console.log(`  국가: ${countryCode}`);
