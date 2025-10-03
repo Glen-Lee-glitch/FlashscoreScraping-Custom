@@ -62,10 +62,10 @@ export const getMatchData = async (browser, matchId) => {
     await retryWithDelay(async () => {
       await page.goto(`${BASE_URL}/match/${matchId}/#/match-summary/match-statistics/0`, { 
         waitUntil: 'domcontentloaded',
-        timeout: 20000 
+        timeout: 30000 // 20초 → 30초
       });
-      await waitForSelectorSafe(page, "div[data-testid='wcl-statistics']", 10000);
-    }, 2, 1000);
+      await waitForSelectorSafe(page, "div[data-testid='wcl-statistics']", 15000); // 10초 → 15초
+    }, 2, 2000); // 1초 → 2초 대기
 
     const statistics = await extractMatchStatistics(page);
 
@@ -82,10 +82,10 @@ export const getMatchData = async (browser, matchId) => {
       console.log(`[ODDS] Trying: ${oddsUrl}`);
       
       await retryWithDelay(async () => {
-        await page.goto(oddsUrl, { waitUntil: 'networkidle2', timeout: 20000 });
+        await page.goto(oddsUrl, { waitUntil: 'networkidle2', timeout: 30000 }); // 20초 → 30초
         // 페이지 로딩 후 약간 대기
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }, 2, 1500);
+        await new Promise(resolve => setTimeout(resolve, 3000)); // 2초 → 3초
+      }, 2, 2000); // 1.5초 → 2초 대기
       
       const pageCheck = await page.evaluate(() => {
         return {
@@ -118,7 +118,7 @@ export const getMatchData = async (browser, matchId) => {
     }
 
     return { ...matchData, statistics, odds: Object.keys(odds).length > 0 ? odds : null };
-  }, 2, 3000); // 최대 2회 재시도, 3초 대기
+  }, 2, 5000); // 최대 2회 재시도, 5초 대기 (3초 → 5초)
 };
 
 const extractTeamIdsFromUrl = (url) => {
