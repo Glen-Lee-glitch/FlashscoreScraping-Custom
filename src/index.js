@@ -18,36 +18,95 @@ import { handleFileType } from './files/handle/index.js';
 
 (async () => {
   const options = parseArguments();
-  let browser = await puppeteer.launch({ headless: options.headless });
+  
+  // 명령행 인수 파싱
+  const args = process.argv.slice(2);
+  const argsMap = {};
+  args.forEach(arg => {
+    const [key, value] = arg.split('=');
+    if (key && value) {
+      argsMap[key] = value;
+    }
+  });
 
-  const fileType = options.fileType || (await selectFileType());
-  const country = options.country ? { name: options.country } : await selectCountry(browser);
-  const league = options.league ? { name: options.league } : await selectLeague(browser, country?.id);
+  // 국가 코드 매핑
+  const countryMapping = {
+    'germany': 'germany',
+    '독일': 'germany',
+    'greece': 'greece', 
+    '그리스': 'greece',
+    'england': 'england',
+    '영국': 'england',
+    'spain': 'spain',
+    '스페인': 'spain',
+    'france': 'france',
+    '프랑스': 'france',
+    'italy': 'italy',
+    '이탈리아': 'italy'
+  };
 
-  const season = league?.url ? await selectSeason(browser, league?.url) : { name: league?.name, url: `${BASE_URL}/football/${country?.name}/${league?.name}` };
+  // 리그 코드 매핑
+  const leagueMapping = {
+    '2-bundesliga': '2-bundesliga',
+    'bundesliga': 'bundesliga',
+    'premier-league': 'premier-league',
+    'super-league': 'super-league',
+    '슈퍼리그': 'super-league',
+    'laliga': 'laliga',
+    'serie-a': 'serie-a',
+    'ligue-1': 'ligue-1'
+  };
 
-  // URL에서 영어 경로명 추출 (한글 파일명 문제 해결)
-  let fileName;
-  if (season?.url) {
-    const urlPath = season.url.replace(BASE_URL, '').replace('/football/', '');
-    fileName = urlPath
-      .toLowerCase()
-      .replace(/\//g, '_')
-      .replace(/[^a-z0-9_-]+/g, '_')
-      .replace(/^_|_$/g, '');
-  } else {
-    // fallback: 기존 방식
-    fileName = `${country?.name}_${season?.name}`
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_|_$/g, '');
-  }
+  // 명령행 인수에서 값 추출
+  const countryCode = countryMapping[argsMap.country] || 'germany';
+  const leagueCode = leagueMapping[argsMap.league] || '2-bundesliga';
+  const fileType = argsMap.fileType || 'json';
+  const seasonYear = argsMap.season || '2024-2025';
+
+  console.log(`🎯 실행 설정:`);
+  console.log(`  국가: ${countryCode}`);
+  console.log(`  리그: ${leagueCode}`);
+  console.log(`  시즌: ${seasonYear}`);
+  console.log(`  파일 형식: ${fileType}\n`);
+
+  let browser = await puppeteer.launch({ 
+    headless: options.headless !== false,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-web-security',
+      '--disable-features=VizDisplayCompositor',
+      '--memory-pressure-off',
+      '--single-process',
+      '--no-zygote',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding'
+    ],
+    protocolTimeout: 60000,
+    timeout: 60000
+  });
+
+  // 직접 URL 구성
+  const seasonUrl = `${BASE_URL}/soccer/${countryCode}/${leagueCode}-${seasonYear}/`;
+  console.log(`🔗 접속 URL: ${seasonUrl}`);
+
+  // 대화형 선택 건너뛰기
+  const country = { name: countryCode, id: countryCode };
+  const league = { name: leagueCode, url: `${BASE_URL}/soccer/${countryCode}/${leagueCode}/` };
+  const season = { name: `${leagueCode} ${seasonYear}`, url: seasonUrl };
+
+  // 파일명 생성
+  const fileName = `soccer_${countryCode}_${leagueCode}-${seasonYear}`;
+  console.log(`📁 출력 파일: ${fileName}.${fileType}\n`);
 
   console.info(`\n📝 Data collection has started!`);
   console.info(`The league data will be saved to: ${OUTPUT_PATH}/${fileName}.${fileType}`);
 
   start();
-  const matchIdList = await getMatchIdList(browser, season?.url);
+  const matchIdList = await getMatchIdList(browser, seasonUrl);
   stop();
 
   const progressbar = initializeProgressbar(matchIdList.length);
