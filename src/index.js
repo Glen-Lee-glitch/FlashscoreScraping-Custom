@@ -96,6 +96,7 @@ const forceKillBrowser = async (browser) => {
     
     // 그리스
     'super-league': 'super-league',
+    'super-league-2': 'super-league-2',
     '슈퍼리그': 'super-league',
     
     // 스페인
