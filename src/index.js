@@ -13,6 +13,7 @@ import { start, stop } from './cli/loader/index.js';
 import { initializeProgressbar } from './cli/progressbar/index.js';
 
 import { getMatchIdList, getMatchData } from './scraper/services/matches/index.js';
+import { initializeDatabase, getExistingMatchIds, checkMatchExists, closeDatabase } from './services/database/index.js';
 
 import { handleFileType } from './files/handle/index.js';
 import { exec } from 'child_process';
@@ -177,9 +178,31 @@ const forceKillBrowser = async (browser) => {
   console.info(`\n📝 Data collection has started!`);
   console.info(`The league data will be saved to: ${OUTPUT_PATH}/${fileName}.${fileType}`);
 
+  // 데이터베이스 초기화 및 기존 매치 ID 로드
+  console.log('\n🔍 데이터베이스에서 기존 매치 ID 확인 중...');
+  initializeDatabase();
+  const existingMatchIds = await getExistingMatchIds();
+
   start();
-  const matchIdList = await getMatchIdList(browser, seasonUrl);
+  const allMatchIdList = await getMatchIdList(browser, seasonUrl);
   stop();
+
+  // 기존 데이터베이스에 없는 매치만 필터링
+  const newMatchIdList = allMatchIdList.filter(matchId => !existingMatchIds.has(matchId));
+  
+  console.log(`📊 전체 매치: ${allMatchIdList.length}개`);
+  console.log(`🆕 새로 스크래핑할 매치: ${newMatchIdList.length}개`);
+  console.log(`⏭️  건너뛸 매치: ${allMatchIdList.length - newMatchIdList.length}개\n`);
+
+  // 새로 스크래핑할 매치가 없으면 종료
+  if (newMatchIdList.length === 0) {
+    console.log('✅ 모든 매치가 이미 데이터베이스에 존재합니다. 스크래핑을 종료합니다.');
+    await closeDatabase();
+    await browser.close();
+    return;
+  }
+
+  const matchIdList = newMatchIdList;
 
   const progressbar = initializeProgressbar(matchIdList.length);
 
@@ -250,6 +273,15 @@ const forceKillBrowser = async (browser) => {
     }
     
     try {
+      // 중복 체크 (추가 안전장치)
+      const matchExists = await checkMatchExists(matchId);
+      if (matchExists) {
+        console.log(`⏭️  매치 ${matchId} 이미 존재, 건너뛰기...`);
+        currentIndex++;
+        progressbar.increment();
+        continue;
+      }
+
       matchData[matchId] = await getMatchData(browser, matchId);
       handleFileType(matchData, fileType, fileName);
       
@@ -347,5 +379,7 @@ const forceKillBrowser = async (browser) => {
   console.info(`The data has been successfully saved to: ${OUTPUT_PATH}/${fileName}.${options.fileType}`);
   console.info(`🔄 총 브라우저 재시작 횟수: ${browserRestartCount}\n`);
 
+  // 데이터베이스 연결 종료
+  await closeDatabase();
   await browser.close();
 })();
