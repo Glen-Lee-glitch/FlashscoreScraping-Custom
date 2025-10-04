@@ -53,8 +53,20 @@ def setup_selenium_driver_colab():
 def extract_odds_from_page(driver, match_link, match_id):
     """경기 페이지에서 odds 정보 추출 (멀티스레드 안전)"""
     try:
-        # odds 페이지로 이동
-        odds_link = match_link.replace('#/match-summary/match-summary', '/odds/over-under/full-time/')
+        # odds 페이지로 이동 (URL 구조 수정)
+        # 기존: .../?mid=ID#/match-summary/match-summary
+        # 변경: .../odds/over-under/full-time/?mid=ID
+        if '?mid=' in match_link and '#/match-summary/match-summary' in match_link:
+            # mid 파라미터 추출
+            mid_part = match_link.split('?mid=')[1].split('#')[0]
+            # 기본 경로에서 mid 제거
+            base_path = match_link.split('?mid=')[0]
+            # 올바른 odds URL 구성
+            odds_link = f"{base_path}/odds/over-under/full-time/?mid={mid_part}"
+        else:
+            # fallback: 기존 방식
+            odds_link = match_link.replace('#/match-summary/match-summary', '/odds/over-under/full-time/')
+        
         print(f"[{match_id}] 접속 URL: {odds_link}")
         
         driver.get(odds_link)
