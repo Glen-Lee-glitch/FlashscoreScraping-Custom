@@ -109,6 +109,9 @@ const forceKillBrowser = async (browser) => {
     // 이탈리아
     'serie-a': 'serie-a',
     'serie-b': 'serie-b',
+    'serie-c-group-a': 'serie-c-group-a',
+    'serie-c-group-b': 'serie-c-group-b',
+    'serie-c-group-c': 'serie-c-group-c',
     
     // 프랑스
     'ligue-1': 'ligue-1',
