@@ -37,11 +37,12 @@ const forceKillBrowser = async (browser) => {
     await new Promise(resolve => setTimeout(resolve, 5000));
     
     console.log('🔍 남은 Chrome 프로세스 강제 종료 중...');
-    // 남은 Chrome 프로세스 강제 종료
+    // 남은 Chrome 프로세스 강제 종료 (Colab에서는 권한 제한으로 실패 가능)
     try {
       await execAsync('pkill -f chrome || pkill -f chromium || true');
+      console.log('✅ 남은 Chrome 프로세스 정리 완료');
     } catch (e) {
-      console.log('ℹ️ pkill 명령어 실행 중 에러 (무시):', e.message);
+      console.log('ℹ️ pkill 명령어 실행 실패 (Colab 환경에서는 정상, 무시)');
     }
     
     console.log('✅ 브라우저 강제 종료 완료');

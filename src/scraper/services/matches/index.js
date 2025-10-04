@@ -57,6 +57,9 @@ export const getMatchData = async (browser, matchId) => {
     const teamIds = extractTeamIdsFromUrl(pageUrl);
 
     const matchData = await extractMatchData(page, teamIds);
+    
+    // match_link 추가 (현재 페이지 URL)
+    matchData.match_link = pageUrl;
 
     // 통계 페이지 로딩 재시도
     await retryWithDelay(async () => {
