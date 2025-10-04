@@ -50,6 +50,8 @@ export const getMatchData = async (browser, matchId) => {
   return await retryWithDelay(async () => {
     const page = await openPageAndNavigate(browser, `${BASE_URL}/match/${matchId}/#/match-summary/match-summary`);
 
+    // 동적 로딩을 위해 더 긴 대기 시간 추가
+    await new Promise(resolve => setTimeout(resolve, 3000));
     await waitForSelectorSafe(page, '.duelParticipant__startTime');
 
     // 현재 URL에서 팀 ID 추출
@@ -86,8 +88,8 @@ export const getMatchData = async (browser, matchId) => {
       
       await retryWithDelay(async () => {
         await page.goto(oddsUrl, { waitUntil: 'networkidle2', timeout: 30000 }); // 20초 → 30초
-        // 페이지 로딩 후 약간 대기
-        await new Promise(resolve => setTimeout(resolve, 3000)); // 2초 → 3초
+        // 페이지 로딩 후 더 긴 대기 (동적 로딩을 위해)
+        await new Promise(resolve => setTimeout(resolve, 5000)); // 3초 → 5초
       }, 2, 2000); // 1.5초 → 2초 대기
       
       const pageCheck = await page.evaluate(() => {
@@ -143,7 +145,30 @@ const extractMatchData = async (page, teamIds) => {
     return {
       stage: document.querySelector('.tournamentHeader__country > a')?.innerText.trim(),
       date: document.querySelector('.duelParticipant__startTime')?.innerText.trim(),
-      status: document.querySelector('.fixedHeaderDuel__detailStatus')?.innerText.trim(),
+      status: (() => {
+        // 다양한 status 선택자 시도
+        const statusSelectors = [
+          '.fixedHeaderDuel__detailStatus',
+          '.duelParticipant__status',
+          '.event__time',
+          '.event__stage',
+          '.detailScore__status',
+          '.matchInfo__status',
+          '[class*="status"]',
+          '[class*="time"]'
+        ];
+        
+        for (const selector of statusSelectors) {
+          const element = document.querySelector(selector);
+          if (element) {
+            const text = element.innerText.trim();
+            if (text && text !== 'VS' && text !== 'v' && text !== '-') {
+              return text;
+            }
+          }
+        }
+        return null;
+      })(),
       home: {
         name: document.querySelector('.duelParticipant__home .participant__participantName.participant__overflow')?.innerText.trim(),
       },

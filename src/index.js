@@ -239,7 +239,7 @@ const forceKillBrowser = async (browser) => {
           '--disable-extensions',
           '--disable-plugins',
           '--disable-images',
-          '--disable-javascript',
+          // '--disable-javascript', // Flashscore 동적 로딩을 위해 활성화
           '--max_old_space_size=256'
         ],
         protocolTimeout: 120000, // 120초 타임아웃
@@ -310,7 +310,7 @@ const forceKillBrowser = async (browser) => {
             '--disable-extensions',
             '--disable-plugins',
             '--disable-images',
-            '--disable-javascript',
+            // '--disable-javascript', // Flashscore 동적 로딩을 위해 활성화
             '--max_old_space_size=256'
           ],
           protocolTimeout: 120000, // 120초 타임아웃
