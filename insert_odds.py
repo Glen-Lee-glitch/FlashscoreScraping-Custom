@@ -62,7 +62,7 @@ def insert_odds_from_json(json_file_path):
                     continue
                 
                 # odds 데이터 확인
-                if 'odds' not in match_data or 'over-under' not in match_data['odds']:
+                if 'odds' not in match_data or match_data['odds'] is None or 'over-under' not in match_data['odds']:
                     print(f"⚠️ 경기 {match_id}에 over-under 배당률 없음")
                     skipped_matches += 1
                     continue
