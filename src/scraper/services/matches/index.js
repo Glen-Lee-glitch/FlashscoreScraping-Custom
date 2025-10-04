@@ -78,12 +78,16 @@ export const getMatchData = async (browser, matchId) => {
     const matchPathMatch = pageUrl.match(/\/match\/([^#?]+)/);
     const fullMatchPath = matchPathMatch ? matchPathMatch[1].replace(/\/$/, '') : matchId;
 
+    // mid 파라미터 추출
+    const midMatch = pageUrl.match(/\?mid=([^#&]+)/);
+    const midParam = midMatch ? midMatch[1] : matchId;
+
     // 배당률 페이지로 이동
     const odds = {};
     
     // Over/Under 배당률 수집 (재시도 로직 포함)
     try {
-      const oddsUrl = `${BASE_URL}/match/${fullMatchPath}/odds/over-under/full-time/`;
+      const oddsUrl = `${BASE_URL}/match/${fullMatchPath}/odds/over-under/full-time/?mid=${midParam}`;
       console.log(`[ODDS] Trying: ${oddsUrl}`);
       
       await retryWithDelay(async () => {
