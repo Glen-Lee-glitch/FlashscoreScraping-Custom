@@ -25,9 +25,6 @@ COLAB_MODE = True  # Colab 환경에서는 True로 설정
 
 def setup_selenium_driver_colab():
     """Colab 환경에 최적화된 Selenium 드라이버 설정"""
-    from selenium.webdriver.chrome.service import Service
-    from webdriver_manager.chrome import ChromeDriverManager
-    
     chrome_options = Options()
     
     if COLAB_MODE:
@@ -46,8 +43,7 @@ def setup_selenium_driver_colab():
     
     try:
         # 최신 Selenium은 자동으로 드라이버 관리
-        service = Service()
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        driver = webdriver.Chrome(options=chrome_options)
         driver.implicitly_wait(10)
         return driver
     except Exception as e:
