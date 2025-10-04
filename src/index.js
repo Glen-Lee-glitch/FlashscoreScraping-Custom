@@ -81,14 +81,33 @@ const forceKillBrowser = async (browser) => {
 
   // 리그 코드 매핑
   const leagueMapping = {
+    // 독일
     '2-bundesliga': '2-bundesliga',
     'bundesliga': 'bundesliga',
+    '3-liga': '3-liga',
+    
+    // 영국
     'premier-league': 'premier-league',
+    'championship': 'championship',
+    'league-one': 'league-one',
+    'league-two': 'league-two',
+    'national-league': 'national-league',
+    
+    // 그리스
     'super-league': 'super-league',
     '슈퍼리그': 'super-league',
+    
+    // 스페인
     'laliga': 'laliga',
+    'segunda-division': 'segunda-division',
+    
+    // 이탈리아
     'serie-a': 'serie-a',
-    'ligue-1': 'ligue-1'
+    'serie-b': 'serie-b',
+    
+    // 프랑스
+    'ligue-1': 'ligue-1',
+    'ligue-2': 'ligue-2'
   };
 
   // 현재 연도 기반으로 최신 시즌 계산
