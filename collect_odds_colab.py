@@ -55,10 +55,25 @@ def extract_odds_from_page(driver, match_link, match_id):
     try:
         # odds 페이지로 이동
         odds_link = match_link.replace('#/match-summary/match-summary', '/odds/over-under/full-time/')
+        print(f"[{match_id}] 접속 URL: {odds_link}")
+        
         driver.get(odds_link)
         
         # 동적 로딩 대기
         time.sleep(5)
+        
+        # 페이지 상태 확인
+        page_title = driver.title
+        print(f"[{match_id}] 페이지 제목: {page_title}")
+        
+        # 페이지 내용 일부 확인
+        page_content = driver.page_source[:500]
+        print(f"[{match_id}] 페이지 내용 (처음 500자): {page_content}")
+        
+        # 에러 페이지 확인
+        if "error" in page_title.lower() or "404" in page_title or "not found" in page_title.lower():
+            print(f"[{match_id}] ❌ 에러 페이지 감지")
+            return None
         
         # Over/Under odds 찾기
         odds_data = {
@@ -75,11 +90,16 @@ def extract_odds_from_page(driver, match_link, match_id):
                 'table tbody tr'
             ]
             
+            print(f"[{match_id}] odds 테이블 선택자 시도 중...")
+            found_rows = False
+            
             for selector in table_selectors:
                 try:
                     rows = driver.find_elements(By.CSS_SELECTOR, selector)
+                    print(f"[{match_id}] {selector}: {len(rows)}개 행 발견")
                     if rows:
-                        print(f"[{match_id}] {len(rows)}개 odds 행 발견")
+                        found_rows = True
+                        print(f"[{match_id}] ✅ {len(rows)}개 odds 행 발견 - {selector} 사용")
                         
                         # 기준점별로 배당률을 그룹화
                         odds_by_handicap = {}
@@ -152,7 +172,16 @@ def extract_odds_from_page(driver, match_link, match_id):
                         break  # 첫 번째로 찾은 테이블 사용
                 
                 except Exception as e:
+                    print(f"[{match_id}] {selector} 실패: {e}")
                     continue
+            
+            if not found_rows:
+                print(f"[{match_id}] ❌ 모든 선택자에서 odds 테이블을 찾을 수 없음")
+                # 페이지의 모든 테이블 요소 확인
+                all_tables = driver.find_elements(By.TAG_NAME, 'table')
+                all_divs_with_odds = driver.find_elements(By.XPATH, "//div[contains(@class, 'odds') or contains(@class, 'table')]")
+                print(f"[{match_id}] 전체 테이블: {len(all_tables)}개, odds 관련 div: {len(all_divs_with_odds)}개")
+                return None
                     
         except Exception as e:
             print(f"[{match_id}] odds 테이블 파싱 실패: {e}")
@@ -292,11 +321,12 @@ def main():
         print("✅ 모든 경기의 odds가 이미 수집되었습니다!")
         return
     
-    # 멀티스레드 설정
-    MAX_WORKERS = 4  # Colab에서는 4개 스레드 권장
+    # 멀티스레드 설정 (디버깅을 위해 1개 스레드로 시작)
+    MAX_WORKERS = 1  # 디버깅용: 1개 스레드로 시작
     results = []
     
     print(f"🔄 {MAX_WORKERS}개 스레드로 처리 시작...")
+    print(f"📝 디버깅 모드: 상세한 로그 출력")
     
     # ThreadPoolExecutor로 멀티스레드 처리
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
