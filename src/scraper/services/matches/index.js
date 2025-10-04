@@ -128,7 +128,9 @@ export const getMatchData = async (browser, matchId) => {
 
 const extractTeamIdsFromUrl = (url) => {
   // URL 패턴: /match/soccer/team1-slug-TEAM1ID/team2-slug-TEAM2ID/
-  const match = url.match(/\/match\/[^\/]+\/[^\/]+-([^\/]+)\/[^\/]+-([^\/]+)/);
+  // 팀 ID는 마지막 8글자 정도의 영문+숫자 조합으로 가정
+  // 예: west-brom-CCBWpzjj → ID: CCBWpzjj
+  const match = url.match(/\/match\/[^\/]+\/[^\/]+-([A-Za-z0-9]{6,12})\/[^\/]+-([A-Za-z0-9]{6,12})/);
   
   if (match) {
     return {
