@@ -150,18 +150,64 @@ const extractMatchData = async (page, teamIds) => {
       away: {
         name: document.querySelector('.duelParticipant__away .participant__participantName.participant__overflow')?.innerText.trim(),
       },
-      result: {
-        home: Array.from(document.querySelectorAll('.detailScore__wrapper span:not(.detailScore__divider)'))?.[0]?.innerText.trim(),
-        away: Array.from(document.querySelectorAll('.detailScore__wrapper span:not(.detailScore__divider)'))?.[1]?.innerText.trim(),
-        regulationTime: document
-          .querySelector('.detailScore__fullTime')
-          ?.innerText.trim()
-          .replace(/[\n()]/g, ''),
-        penalties: Array.from(document.querySelectorAll('[data-testid="wcl-scores-overline-02"]'))
-          .find((element) => element.innerText.trim().toLowerCase() === 'penalties')
-          ?.nextElementSibling?.innerText?.trim()
-          .replace(/\s+/g, ''),
-      },
+      result: (() => {
+        // 다양한 점수 선택자 시도
+        let homeScore = null;
+        let awayScore = null;
+        
+        // 방법 1: detailScore__wrapper 사용
+        const detailWrapper = document.querySelector('.detailScore__wrapper');
+        if (detailWrapper) {
+          const spans = detailWrapper.querySelectorAll('span:not(.detailScore__divider)');
+          if (spans.length >= 2) {
+            homeScore = spans[0]?.innerText.trim();
+            awayScore = spans[1]?.innerText.trim();
+          }
+        }
+        
+        // 방법 2: 다른 점수 선택자들 시도
+        if (!homeScore || !awayScore) {
+          const scoreSelectors = [
+            '.duelParticipant__score span',
+            '.participant__score span',
+            '.matchScore span',
+            '.score span',
+            '[data-testid="wcl-scores-caption-01"] span'
+          ];
+          
+          for (const selector of scoreSelectors) {
+            const scoreElements = document.querySelectorAll(selector);
+            if (scoreElements.length >= 2) {
+              homeScore = scoreElements[0]?.innerText.trim();
+              awayScore = scoreElements[1]?.innerText.trim();
+              if (homeScore && awayScore) break;
+            }
+          }
+        }
+        
+        // 방법 3: 텍스트 기반 추출 (최후 수단)
+        if (!homeScore || !awayScore) {
+          const bodyText = document.body.innerText;
+          const scoreMatch = bodyText.match(/(\d+)\s*[-:]\s*(\d+)/);
+          if (scoreMatch) {
+            homeScore = scoreMatch[1];
+            awayScore = scoreMatch[2];
+          }
+        }
+        
+        return {
+          home: homeScore || null,
+          away: awayScore || null,
+          regulationTime: document
+            .querySelector('.detailScore__fullTime')
+            ?.innerText.trim()
+            .replace(/[\n()]/g, ''),
+          penalties: Array.from(document.querySelectorAll('[data-testid="wcl-scores-overline-02"]'))
+            .find((element) => element.innerText.trim().toLowerCase() === 'penalties')
+            ?.nextElementSibling?.innerText?.trim()
+            .replace(/\s+/g, ''),
+        };
+      })(),
     };
   });
   

@@ -30,15 +30,16 @@ def connect_to_db():
         return None
 
 def parse_match_time(date_str):
-    """날짜 문자열을 PostgreSQL TIMESTAMPTZ 형식으로 변환 (KST 시간대 유지)"""
+    """날짜 문자열을 PostgreSQL TIMESTAMPTZ 형식으로 변환 (Colab UTC → KST 변환)"""
     try:
         # "03.10.2025 19:00" 형식 처리 (DD.MM.YYYY HH:MM)
         if '.' in date_str and len(date_str.split('.')[0]) <= 2:
-            # DD.MM.YYYY HH:MM 형식
+            # DD.MM.YYYY HH:MM 형식 - UTC로 파싱 후 +9시간 (KST)
             dt = datetime.strptime(date_str, '%d.%m.%Y %H:%M')
-            # KST 시간대(+09:00)로 설정
+            # UTC에서 KST로 변환 (+9시간)
             kst = timezone(timedelta(hours=9))
-            dt = dt.replace(tzinfo=kst)
+            dt = dt.replace(tzinfo=timezone.utc)  # UTC로 설정
+            dt = dt.astimezone(kst)  # KST로 변환
             return dt
         
         # "2024-12-21T15:30:00+00:00" 형식 처리
