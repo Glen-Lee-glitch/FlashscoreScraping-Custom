@@ -30,16 +30,16 @@ def connect_to_db():
         return None
 
 def parse_match_time(date_str):
-    """날짜 문자열을 PostgreSQL TIMESTAMPTZ 형식으로 변환 (Colab UTC → KST 변환)"""
+    """날짜 문자열을 PostgreSQL TIMESTAMPTZ 형식으로 변환 (로컬 시간 → UTC 변환)"""
     try:
         # "03.10.2025 19:00" 형식 처리 (DD.MM.YYYY HH:MM)
         if '.' in date_str and len(date_str.split('.')[0]) <= 2:
-            # DD.MM.YYYY HH:MM 형식 - UTC로 파싱 후 +9시간 (KST)
+            # DD.MM.YYYY HH:MM 형식 - 로컬 시간으로 파싱 후 UTC로 변환
             dt = datetime.strptime(date_str, '%d.%m.%Y %H:%M')
-            # UTC에서 KST로 변환 (+9시간)
+            # 로컬 시간(한국 시간)으로 가정하고 UTC로 변환 (-9시간)
             kst = timezone(timedelta(hours=9))
-            dt = dt.replace(tzinfo=timezone.utc)  # UTC로 설정
-            dt = dt.astimezone(kst)  # KST로 변환
+            dt = dt.replace(tzinfo=kst)  # KST로 설정
+            dt = dt.astimezone(timezone.utc)  # UTC로 변환
             return dt
         
         # "2024-12-21T15:30:00+00:00" 형식 처리
@@ -69,6 +69,44 @@ def extract_season_from_filename(filename):
         season = name_without_ext
     
     return season
+
+def find_best_odds(over_under_odds_list):
+    """
+    최적의 배당률을 찾는 함수
+    1. 오버배당률과 언더배당률의 차이의 절댓값이 가장 작은 것
+    2. 차이가 같으면 오버 배당률이 더 높은 것
+    3. 그것도 같으면 아무거나
+    """
+    if not over_under_odds_list or len(over_under_odds_list) == 0:
+        return None
+    
+    best_odds = None
+    min_difference = float('inf')
+    max_over_odds = -1
+    
+    for odds_data in over_under_odds_list:
+        try:
+            over_odds = float(odds_data['average']['over'])
+            under_odds = float(odds_data['average']['under'])
+            
+            # 오버배당률과 언더배당률의 차이 절댓값
+            difference = abs(over_odds - under_odds)
+            
+            # 조건 1: 차이가 가장 작은 것
+            if difference < min_difference:
+                min_difference = difference
+                max_over_odds = over_odds
+                best_odds = odds_data
+            # 조건 2: 차이가 같으면 오버 배당률이 더 높은 것
+            elif difference == min_difference and over_odds > max_over_odds:
+                max_over_odds = over_odds
+                best_odds = odds_data
+                
+        except (ValueError, KeyError, TypeError):
+            # 숫자 변환 실패 시 해당 데이터 건너뛰기
+            continue
+    
+    return best_odds
 
 def insert_matches_from_json(json_file_path):
     """JSON 파일에서 경기 데이터를 읽어서 matches 테이블에 삽입"""
@@ -133,17 +171,37 @@ def insert_matches_from_json(json_file_path):
                 if 'result' in match_data and match_data['result']:
                     result = match_data['result']
                     if 'home' in result and 'away' in result:
-                        home_score = result['home']
-                        away_score = result['away']
+                        # status가 없을 때 result가 이상하게 저장되는 문제 해결
+                        try:
+                            home_score = int(result['home']) if result['home'].isdigit() else None
+                            away_score = int(result['away']) if result['away'].isdigit() else None
+                        except (ValueError, AttributeError):
+                            # 숫자가 아닌 값이면 None으로 설정
+                            home_score = None
+                            away_score = None
+                
+                # 최적 배당률 추출 (odds에서)
+                best_benchmark = None
+                best_over_odds = None
+                best_under_odds = None
+                
+                if 'odds' in match_data and match_data['odds'] and 'over-under' in match_data['odds']:
+                    over_under_odds = match_data['odds']['over-under']
+                    if over_under_odds and len(over_under_odds) > 0:
+                        best_odds = find_best_odds(over_under_odds)
+                        if best_odds:
+                            best_benchmark = best_odds['handicap']
+                            best_over_odds = best_odds['average']['over']
+                            best_under_odds = best_odds['average']['under']
                 
                 # 개별 트랜잭션으로 처리
                 try:
                     cursor.execute("BEGIN;")
                     
-                    # SQL 삽입 쿼리 (match_link, season 컬럼 포함)
+                    # SQL 삽입 쿼리 (best odds 컬럼 포함)
                     insert_query = """
-                    INSERT INTO matches (id, match_link, match_time, status, home_team_id, away_team_id, home_score, away_score, season)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO matches (id, match_link, match_time, status, home_team_id, away_team_id, home_score, away_score, season, best_benchmark, best_over_odds, best_under_odds)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (id) DO UPDATE SET
                         match_link = EXCLUDED.match_link,
                         match_time = EXCLUDED.match_time,
@@ -152,7 +210,10 @@ def insert_matches_from_json(json_file_path):
                         away_team_id = EXCLUDED.away_team_id,
                         home_score = EXCLUDED.home_score,
                         away_score = EXCLUDED.away_score,
-                        season = EXCLUDED.season
+                        season = EXCLUDED.season,
+                        best_benchmark = EXCLUDED.best_benchmark,
+                        best_over_odds = EXCLUDED.best_over_odds,
+                        best_under_odds = EXCLUDED.best_under_odds
                     """
                     
                     cursor.execute(insert_query, (
@@ -164,7 +225,10 @@ def insert_matches_from_json(json_file_path):
                         away_team_id,
                         home_score,
                         away_score,
-                        season
+                        season,
+                        best_benchmark,
+                        best_over_odds,
+                        best_under_odds
                     ))
                     
                     cursor.execute("COMMIT;")

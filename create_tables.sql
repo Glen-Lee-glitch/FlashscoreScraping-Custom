@@ -19,6 +19,9 @@ CREATE TABLE matches (
     home_score SMALLINT,
     away_score SMALLINT,
     season TEXT,
+    best_benchmark NUMERIC(4, 2),
+    best_over_odds NUMERIC(8, 2),
+    best_under_odds NUMERIC(8, 2),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
