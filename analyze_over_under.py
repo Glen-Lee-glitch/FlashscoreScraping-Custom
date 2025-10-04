@@ -39,11 +39,11 @@ def analyze_over_under_results():
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
-        # 그리스 Super League 2 경기 데이터 조회
+        # 그리스 Super League 2 경기 데이터 조회 (두 시즌 모두 포함)
         cursor.execute("""
             SELECT id, home_score, away_score, best_benchmark, best_over_odds, best_under_odds
             FROM matches 
-            WHERE season = 'greece_super-league-2-2025-2026'
+            WHERE season IN ('greece_super-league-2-2024-2025', 'greece_super-league-2-2025-2026')
             AND home_score IS NOT NULL 
             AND away_score IS NOT NULL
             AND best_benchmark IS NOT NULL
@@ -193,13 +193,141 @@ def classify_result(total_score, benchmark):
         else:
             return 'push'
 
+def analyze_team_scoring_patterns():
+    """팀별 득점 패턴 분석 (2득점 또는 3득점이 아닌 경기)"""
+    
+    conn = connect_to_db()
+    if not conn:
+        return
+    
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # 그리스 Super League 2 경기 데이터 조회 (팀별 분석용)
+        cursor.execute("""
+            SELECT 
+                m.home_team_id, m.away_team_id, m.home_score, m.away_score,
+                (m.home_score + m.away_score) as total_score,
+                ht.team as home_team_name, at.team as away_team_name
+            FROM matches m
+            JOIN teams ht ON m.home_team_id = ht.team_id
+            JOIN teams at ON m.away_team_id = at.team_id
+            WHERE m.season IN ('greece_super-league-2-2024-2025', 'greece_super-league-2-2025-2026')
+            AND m.home_score IS NOT NULL 
+            AND m.away_score IS NOT NULL
+            ORDER BY m.match_time
+        """)
+        
+        matches = cursor.fetchall()
+        
+        if not matches:
+            print("❌ 분석할 데이터가 없습니다.")
+            return
+        
+        print(f"📊 총 {len(matches)}개 경기로 팀별 득점 패턴 분석 시작")
+        print("=" * 80)
+        
+        # 팀별 통계 수집
+        team_stats = {}
+        
+        for match in matches:
+            home_team_name = match['home_team_name']
+            away_team_name = match['away_team_name']
+            total_score = match['total_score']
+            
+            # 홈팀 통계
+            if home_team_name not in team_stats:
+                team_stats[home_team_name] = {
+                    'total_matches': 0,
+                    'non_2_3_matches': 0,
+                    'scores': []
+                }
+            
+            team_stats[home_team_name]['total_matches'] += 1
+            team_stats[home_team_name]['scores'].append(total_score)
+            
+            if total_score != 2 and total_score != 3:
+                team_stats[home_team_name]['non_2_3_matches'] += 1
+            
+            # 어웨이팀 통계
+            if away_team_name not in team_stats:
+                team_stats[away_team_name] = {
+                    'total_matches': 0,
+                    'non_2_3_matches': 0,
+                    'scores': []
+                }
+            
+            team_stats[away_team_name]['total_matches'] += 1
+            team_stats[away_team_name]['scores'].append(total_score)
+            
+            if total_score != 2 and total_score != 3:
+                team_stats[away_team_name]['non_2_3_matches'] += 1
+        
+        # 2득점 또는 3득점이 아닌 경기 비율 계산 및 정렬
+        team_ratios = []
+        for team, stats in team_stats.items():
+            if stats['total_matches'] > 0:
+                ratio = stats['non_2_3_matches'] / stats['total_matches'] * 100
+                team_ratios.append({
+                    'team': team,
+                    'total_matches': stats['total_matches'],
+                    'non_2_3_matches': stats['non_2_3_matches'],
+                    'ratio': ratio,
+                    'scores': stats['scores']
+                })
+        
+        # 비율 기준으로 내림차순 정렬
+        team_ratios.sort(key=lambda x: x['ratio'], reverse=True)
+        
+        # 상위 3개 팀 출력
+        print("🏆 2득점 또는 3득점이 '아닌' 경기 비율이 높은 상위 3개 팀:")
+        print("=" * 80)
+        
+        for i, team_data in enumerate(team_ratios[:3]):
+            team = team_data['team']
+            total_matches = team_data['total_matches']
+            non_2_3_matches = team_data['non_2_3_matches']
+            ratio = team_data['ratio']
+            scores = team_data['scores']
+            
+            print(f"{i+1}. {team}")
+            print(f"   총 경기 수: {total_matches}개")
+            print(f"   2득점 또는 3득점이 아닌 경기: {non_2_3_matches}개")
+            print(f"   비율: {ratio:.1f}%")
+            
+            # 득점 분포 분석
+            score_distribution = {}
+            for score in scores:
+                score_distribution[score] = score_distribution.get(score, 0) + 1
+            
+            print(f"   득점 분포: {dict(sorted(score_distribution.items()))}")
+            print()
+        
+        # 전체 통계
+        print("📊 전체 통계:")
+        print(f"   분석된 팀 수: {len(team_ratios)}개")
+        print(f"   평균 2득점/3득점 비율: {sum(t['non_2_3_matches'] for t in team_ratios) / sum(t['total_matches'] for t in team_ratios) * 100:.1f}%")
+        
+    except Exception as e:
+        print(f"❌ 분석 중 오류: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+        print("\n🔌 데이터베이스 연결 종료")
+
 def main():
     """메인 함수"""
     print("🚀 그리스 Super League 2 오버/언더 분석 시작")
-    print("📅 시즌: 2025-2026")
+    print("📅 시즌: 2024-2025, 2025-2026 (통합 분석)")
     print()
     
     analyze_over_under_results()
+    
+    print("\n" + "="*80)
+    print("🏟️ 팀별 득점 패턴 분석")
+    print("="*80)
+    
+    analyze_team_scoring_patterns()
 
 if __name__ == "__main__":
     main()
