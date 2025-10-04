@@ -13,7 +13,7 @@ import { start, stop } from './cli/loader/index.js';
 import { initializeProgressbar } from './cli/progressbar/index.js';
 
 import { getMatchIdList, getMatchData } from './scraper/services/matches/index.js';
-import { initializeDatabase, getExistingMatchIds, checkMatchExists, closeDatabase } from './services/database/index.js';
+import { initializeDatabase, getExistingMatchIds, checkMatchExists, insertMatchesBatch, closeDatabase } from './services/database/index.js';
 
 import { handleFileType } from './files/handle/index.js';
 import { exec } from 'child_process';
@@ -305,7 +305,7 @@ const forceKillBrowser = async (browser) => {
       currentIndex++;
       progressbar.increment();
       
-      // 중단점 저장 (10개마다)
+      // 중단점 저장 및 DB 배치 삽입 (10개마다)
       if (currentIndex % 10 === 0) {
         try {
           const fs = await import('fs');
@@ -316,8 +316,18 @@ const forceKillBrowser = async (browser) => {
             totalMatches: matchIdList.length
           };
           fs.writeFileSync(checkpointFile, JSON.stringify(checkpointData, null, 2));
+          
+          // 10개 경기마다 데이터베이스에 자동 삽입
+          console.log(`\n💾 ${currentIndex}개 경기 완료. 데이터베이스에 배치 삽입 시작...`);
+          const batchResult = await insertMatchesBatch(matchData);
+          console.log(`✅ 배치 삽입 완료: 성공 ${batchResult.success}개, 실패 ${batchResult.errors.length}개`);
+          
+          // 삽입 완료 후 matchData 초기화 (메모리 절약)
+          Object.keys(matchData).forEach(key => delete matchData[key]);
+          console.log(`🧹 메모리 정리: matchData 초기화 완료\n`);
+          
         } catch (error) {
-          console.log(`⚠️ 중단점 저장 실패: ${error.message}`);
+          console.log(`⚠️ 중단점 저장 또는 DB 삽입 실패: ${error.message}`);
         }
       }
       
@@ -379,6 +389,17 @@ const forceKillBrowser = async (browser) => {
   }
 
   progressbar.stop();
+
+  // 마지막 남은 경기들 DB 삽입 (10개 미만)
+  if (Object.keys(matchData).length > 0) {
+    console.log(`\n💾 마지막 ${Object.keys(matchData).length}개 경기를 데이터베이스에 삽입...`);
+    try {
+      const finalBatchResult = await insertMatchesBatch(matchData);
+      console.log(`✅ 최종 배치 삽입 완료: 성공 ${finalBatchResult.success}개, 실패 ${finalBatchResult.errors.length}개`);
+    } catch (error) {
+      console.log(`⚠️ 최종 배치 삽입 실패: ${error.message}`);
+    }
+  }
 
   // 완료 후 중단점 파일 삭제
   try {
