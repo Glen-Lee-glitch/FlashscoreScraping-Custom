@@ -78,7 +78,9 @@ const forceKillBrowser = async (browser) => {
     'france': 'france',
     '프랑스': 'france',
     'italy': 'italy',
-    '이탈리아': 'italy'
+    '이탈리아': 'italy',
+    'czech-republic': 'czech-republic',
+    '체코': 'czech-republic'
   };
 
   // 리그 코드 매핑
@@ -110,7 +112,12 @@ const forceKillBrowser = async (browser) => {
     
     // 프랑스
     'ligue-1': 'ligue-1',
-    'ligue-2': 'ligue-2'
+    'ligue-2': 'ligue-2',
+    
+    // 체코
+    'first-league': 'first-league',
+    'cfl': 'first-league',
+    'CFL': 'first-league'
   };
 
   // 현재 연도 기반으로 최신 시즌 계산
