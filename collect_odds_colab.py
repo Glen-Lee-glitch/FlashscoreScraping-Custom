@@ -59,8 +59,8 @@ def extract_odds_from_page(driver, match_link, match_id):
         if '?mid=' in match_link and '#/match-summary/match-summary' in match_link:
             # mid 파라미터 추출
             mid_part = match_link.split('?mid=')[1].split('#')[0]
-            # 기본 경로에서 mid 제거
-            base_path = match_link.split('?mid=')[0]
+            # 기본 경로에서 mid 제거 (끝의 / 제거하여 중복 방지)
+            base_path = match_link.split('?mid=')[0].rstrip('/')
             # 올바른 odds URL 구성
             odds_link = f"{base_path}/odds/over-under/full-time/?mid={mid_part}"
         else:
