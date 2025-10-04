@@ -115,9 +115,18 @@ const forceKillBrowser = async (browser) => {
     'ligue-2': 'ligue-2',
     
     // 체코
-    'first-league': 'first-league',
-    'cfl': 'first-league',
-    'CFL': 'first-league'
+    'chance-liga': 'chance-liga',
+    'first-league': 'chance-liga',
+    'cfl': 'chance-liga',
+    'CFL': 'chance-liga',
+    '1-liga': 'chance-liga',
+    'division-2': 'division-2',
+    '3-cfl-group-a': '3-cfl-group-a',
+    '3-cfl-group-b': '3-cfl-group-b',
+    '3-cfl': '3-cfl',
+    '3-msfl': '3-msfl',
+    'msfl': '3-msfl',
+    'MSFL': '3-msfl'
   };
 
   // 현재 연도 기반으로 최신 시즌 계산
