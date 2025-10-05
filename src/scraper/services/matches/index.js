@@ -152,18 +152,28 @@ const extractTeamIdsFromUrl = (url) => {
 
 const extractMatchData = async (page, teamIds) => {
   const basicData = await page.evaluate(async () => {
-    // 경기 이벤트 추출 (요소 0)
+    // 경기 이벤트 추출 (smv__incident가 있는 요소 찾기)
     let matchEvents = null;
     try {
       const loadableCompleteElements = document.querySelectorAll('.loadable.complete');
-      const firstElement = loadableCompleteElements[0];
+      let eventElement = null;
       
-      if (firstElement) {
+      // smv__incident가 있는 요소 찾기
+      for (let i = 0; i < loadableCompleteElements.length; i++) {
+        const element = loadableCompleteElements[i];
+        const incidents = element.querySelectorAll('.smv__incident');
+        if (incidents.length > 0) {
+          eventElement = element;
+          break;
+        }
+      }
+      
+      if (eventElement) {
         // 전반전/후반전 점수 추출
         let firstHalfScore = null;
         let secondHalfScore = null;
         
-        const fullText = firstElement.innerText;
+        const fullText = eventElement.innerText;
         
         // "1ST HALF" 다음에 나오는 점수 찾기
         const firstHalfMatch = fullText.match(/1ST HALF\s*(\d+\s*-\s*\d+)/i);
@@ -187,7 +197,7 @@ const extractMatchData = async (page, teamIds) => {
         }
         
         // smv__incident 요소들 추출
-        const incidents = Array.from(firstElement.querySelectorAll('.smv__incident')).map((incident) => {
+        const incidents = Array.from(eventElement.querySelectorAll('.smv__incident')).map((incident) => {
           const incidentInfo = {
             eventType: '기타',
             time: null,
@@ -260,7 +270,7 @@ const extractMatchData = async (page, teamIds) => {
           if (!teamInfo) {
             // 요소의 상대적 위치로 판단
             const rect = incident.getBoundingClientRect();
-            const containerRect = firstElement.getBoundingClientRect();
+            const containerRect = eventElement.getBoundingClientRect();
             
             // 컨테이너의 중앙점 기준으로 왼쪽은 홈팀, 오른쪽은 어웨이팀
             const centerX = containerRect.left + containerRect.width / 2;
@@ -329,14 +339,21 @@ const extractMatchData = async (page, teamIds) => {
       console.log('[BROWSER] 경기 이벤트 추출 실패:', error.message);
     }
     
-    // 디버깅: 요소 0 존재 여부 확인
+    // 디버깅: 이벤트 요소 존재 여부 확인
     const loadableCompleteElements = document.querySelectorAll('.loadable.complete');
     console.log(`[BROWSER] loadable complete 요소 개수: ${loadableCompleteElements.length}`);
-    if (loadableCompleteElements.length > 0) {
-      const firstElement = loadableCompleteElements[0];
-      console.log(`[BROWSER] 첫 번째 요소 텍스트: ${firstElement.innerText.substring(0, 200)}`);
-      const smvIncidents = firstElement.querySelectorAll('.smv__incident');
-      console.log(`[BROWSER] smv__incident 요소 개수: ${smvIncidents.length}`);
+    let eventElementFound = false;
+    for (let i = 0; i < loadableCompleteElements.length; i++) {
+      const element = loadableCompleteElements[i];
+      const incidents = element.querySelectorAll('.smv__incident');
+      if (incidents.length > 0) {
+        console.log(`[BROWSER] 요소 ${i}에서 ${incidents.length}개 이벤트 발견`);
+        eventElementFound = true;
+        break;
+      }
+    }
+    if (!eventElementFound) {
+      console.log(`[BROWSER] 이벤트가 포함된 요소를 찾을 수 없습니다`);
     }
 
     return {
