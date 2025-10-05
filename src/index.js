@@ -148,9 +148,9 @@ const forceKillBrowser = async (browser) => {
     latestSeason = `${currentYear - 1}-${currentYear}`;
   }
 
-  // 명령행 인수에서 값 추출
-  const countryCode = countryMapping[argsMap.country] || 'germany';
-  const leagueCode = leagueMapping[argsMap.league] || '2-bundesliga';
+  // 명령행 인수에서 값 추출 (매핑 우선, 없으면 입력값 사용)
+  const countryCode = countryMapping[argsMap.country] || argsMap.country || 'germany';
+  const leagueCode = leagueMapping[argsMap.league] || argsMap.league || '2-bundesliga';
   const fileType = argsMap.fileType || 'json';
   const seasonYear = argsMap.season || latestSeason;
 
