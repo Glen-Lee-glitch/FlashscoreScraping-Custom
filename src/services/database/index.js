@@ -162,6 +162,52 @@ export const insertMatchesBatch = async (matchesData, seasonYear = null, baseUrl
       results.success++;
       console.log(`✅ 매치 삽입 성공: ${matchId}`);
 
+      // 경기 이벤트 삽입 (match_events 테이블)
+      if (matchInfo.events && matchInfo.events.events && matchInfo.events.events.length > 0) {
+        try {
+          // JSONB 형태로 이벤트 데이터 구성
+          const eventsData = {
+            events: matchInfo.events.events.map(event => ({
+              type: event.eventType,
+              time: event.time,
+              team: event.team,
+              description: event.description,
+              player: event.player || null,
+              assist: event.assist || null,
+              player_out: event.player_out || null,
+              player_in: event.player_in || null,
+              card_type: event.card_type || null
+            }))
+          };
+
+          const insertEventsQuery = `
+            INSERT INTO match_events (
+              match_id, first_half_score, second_half_score, events
+            ) VALUES ($1, $2, $3, $4)
+            ON CONFLICT (match_id) DO UPDATE SET
+              first_half_score = EXCLUDED.first_half_score,
+              second_half_score = EXCLUDED.second_half_score,
+              events = EXCLUDED.events,
+              updated_at = NOW()
+          `;
+
+          await pool.query(insertEventsQuery, [
+            matchId,
+            matchInfo.events.firstHalfScore,
+            matchInfo.events.secondHalfScore,
+            JSON.stringify(eventsData)
+          ]);
+
+          console.log(`✅ 경기 이벤트 삽입 성공: ${matchId} (${matchInfo.events.events.length}개 이벤트)`);
+        } catch (eventsError) {
+          const errorMsg = `경기 이벤트 ${matchId} 삽입 실패: ${eventsError.message}`;
+          console.error(`❌ ${errorMsg}`);
+          results.errors.push(errorMsg);
+        }
+      } else {
+        console.log(`ℹ️ 매치 ${matchId}에는 이벤트 데이터가 없습니다.`);
+      }
+
     } catch (error) {
       const errorMsg = `매치 ${matchId} 삽입 실패: ${error.message}`;
       console.error(`❌ ${errorMsg}`);

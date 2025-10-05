@@ -148,9 +148,187 @@ const extractTeamIdsFromUrl = (url) => {
 
 const extractMatchData = async (page, teamIds) => {
   const basicData = await page.evaluate(async () => {
+    // 경기 이벤트 추출 (요소 0)
+    let matchEvents = null;
+    try {
+      const loadableCompleteElements = document.querySelectorAll('.loadable.complete');
+      const firstElement = loadableCompleteElements[0];
+      
+      if (firstElement) {
+        // 전반전/후반전 점수 추출
+        let firstHalfScore = null;
+        let secondHalfScore = null;
+        
+        const fullText = firstElement.innerText;
+        
+        // "1ST HALF" 다음에 나오는 점수 찾기
+        const firstHalfMatch = fullText.match(/1ST HALF\s*(\d+\s*-\s*\d+)/i);
+        if (firstHalfMatch) {
+          firstHalfScore = firstHalfMatch[1];
+        }
+        
+        // "2ND HALF" 다음에 나오는 점수 찾기
+        const secondHalfMatch = fullText.match(/2ND HALF\s*(\d+\s*-\s*\d+)/i);
+        if (secondHalfMatch) {
+          secondHalfScore = secondHalfMatch[1];
+        }
+        
+        // 백업: 단순 점수 패턴 찾기
+        if (!firstHalfScore || !secondHalfScore) {
+          const scoreMatches = fullText.match(/(\d+)\s*-\s*(\d+)/g);
+          if (scoreMatches && scoreMatches.length >= 2) {
+            if (!firstHalfScore) firstHalfScore = scoreMatches[0];
+            if (!secondHalfScore) secondHalfScore = scoreMatches[1];
+          }
+        }
+        
+        // smv__incident 요소들 추출
+        const incidents = Array.from(firstElement.querySelectorAll('.smv__incident')).map((incident) => {
+          const incidentInfo = {
+            eventType: '기타',
+            time: null,
+            team: null,
+            description: incident.innerText?.trim() || ''
+          };
+          
+          const text = incidentInfo.description;
+          
+          // 시간 추출 (예: "38'", "46'", "90+4'")
+          const timeMatch = text.match(/(\d+)'/);
+          if (timeMatch) {
+            incidentInfo.time = parseInt(timeMatch[1]);
+          }
+          
+          // 이벤트 분류 (HTML 구조 기반)
+          const iconElement = incident.querySelector('.smv__incidentIcon, .smv__incidentIconSub');
+          if (iconElement) {
+            const iconHTML = iconElement.innerHTML;
+            if (iconHTML.includes('wcl-icon-soccer') || iconHTML.includes('Goal')) {
+              incidentInfo.eventType = '골';
+            } else if (iconHTML.includes('substitution')) {
+              incidentInfo.eventType = '교체';
+            } else if (iconHTML.includes('card-ico') || iconHTML.includes('Yellow Card') || iconHTML.includes('Red Card')) {
+              incidentInfo.eventType = '카드';
+            }
+          }
+          
+          // 텍스트 기반 백업 분류
+          if (incidentInfo.eventType === '기타') {
+            if (text.includes('골') || text.includes('Goal')) {
+              incidentInfo.eventType = '골';
+            } else if (text.includes('교체') || text.includes('Substitution')) {
+              incidentInfo.eventType = '교체';
+            } else if (text.includes('카드') || text.includes('Card')) {
+              incidentInfo.eventType = '카드';
+            }
+          }
+          
+          // 팀 판단 (홈/어웨이) - HTML 구조 분석
+          let teamInfo = null;
+          
+          // 부모 요소 체인을 따라가며 홈/어웨이 정보 찾기
+          let currentElement = incident;
+          while (currentElement && !teamInfo) {
+            const className = currentElement.className;
+            const classList = Array.from(currentElement.classList);
+            const dataTestId = currentElement.getAttribute('data-testid');
+            
+            // 홈팀 관련 클래스나 속성 찾기
+            if (className.includes('home') || 
+                classList.some(cls => cls.includes('home')) ||
+                dataTestId?.includes('home')) {
+              teamInfo = '홈';
+              break;
+            }
+            
+            // 어웨이팀 관련 클래스나 속성 찾기
+            if (className.includes('away') || 
+                classList.some(cls => cls.includes('away')) ||
+                dataTestId?.includes('away')) {
+              teamInfo = '어웨이';
+              break;
+            }
+            
+            currentElement = currentElement.parentElement;
+          }
+          
+          // 여전히 찾지 못했다면 위치 기반 추정
+          if (!teamInfo) {
+            // 요소의 상대적 위치로 판단
+            const rect = incident.getBoundingClientRect();
+            const containerRect = firstElement.getBoundingClientRect();
+            
+            // 컨테이너의 중앙점 기준으로 왼쪽은 홈팀, 오른쪽은 어웨이팀
+            const centerX = containerRect.left + containerRect.width / 2;
+            
+            if (rect.left < centerX) {
+              teamInfo = '홈';
+            } else {
+              teamInfo = '어웨이';
+            }
+          }
+          
+          incidentInfo.team = teamInfo;
+          
+          // 골의 경우 선수명과 어시스트 추출
+          if (incidentInfo.eventType === '골') {
+            const lines = text.split('\n').filter(line => line.trim());
+            if (lines.length >= 2) {
+              incidentInfo.player = lines[1].trim(); // 골득점자
+              if (text.includes('(') && text.includes(')')) {
+                const assistMatch = text.match(/\(([^)]+)\)/);
+                if (assistMatch) {
+                  incidentInfo.assist = assistMatch[1].trim();
+                }
+              }
+            }
+          }
+          
+          // 교체의 경우 선수명 추출
+          if (incidentInfo.eventType === '교체') {
+            const lines = text.split('\n').filter(line => line.trim());
+            if (lines.length >= 3) {
+              incidentInfo.player_out = lines[1].trim(); // 나간 선수
+              incidentInfo.player_in = lines[2].trim();  // 들어온 선수
+            }
+          }
+          
+          // 카드의 경우 선수명과 카드 타입 추출
+          if (incidentInfo.eventType === '카드') {
+            const lines = text.split('\n').filter(line => line.trim());
+            if (lines.length >= 2) {
+              incidentInfo.player = lines[1].trim(); // 카드 받은 선수
+            }
+            
+            // 카드 타입 추출
+            if (iconElement && iconElement.innerHTML.includes('yellowCard')) {
+              incidentInfo.card_type = 'Yellow Card';
+            } else if (iconElement && iconElement.innerHTML.includes('redCard')) {
+              incidentInfo.card_type = 'Red Card';
+            } else if (text.includes('Yellow') || text.includes('노란')) {
+              incidentInfo.card_type = 'Yellow Card';
+            } else if (text.includes('Red') || text.includes('빨간')) {
+              incidentInfo.card_type = 'Red Card';
+            }
+          }
+          
+          return incidentInfo;
+        });
+        
+        matchEvents = {
+          firstHalfScore: firstHalfScore,
+          secondHalfScore: secondHalfScore,
+          events: incidents
+        };
+      }
+    } catch (error) {
+      console.log('[BROWSER] 경기 이벤트 추출 실패:', error.message);
+    }
+
     return {
       stage: document.querySelector('.tournamentHeader__country > a')?.innerText.trim(),
       date: document.querySelector('.duelParticipant__startTime')?.innerText.trim(),
+      events: matchEvents, // 경기 이벤트 정보 추가
       status: (() => {
         // 다양한 status 선택자 시도
         const statusSelectors = [
