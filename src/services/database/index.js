@@ -74,15 +74,15 @@ export const insertMatchesBatch = async (matchesData) => {
       // 팀 정보 먼저 삽입 (중복 시 무시)
       if (matchInfo.home?.id && matchInfo.home?.name) {
         await pool.query(
-          'INSERT INTO teams (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING',
-          [matchInfo.home.id, matchInfo.home.name]
+          'INSERT INTO teams (team_id, team, sport_type, nation) VALUES ($1, $2, $3, $4) ON CONFLICT (team_id) DO NOTHING',
+          [matchInfo.home.id, matchInfo.home.name, 'soccer', 'italy']
         );
       }
       
       if (matchInfo.away?.id && matchInfo.away?.name) {
         await pool.query(
-          'INSERT INTO teams (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING',
-          [matchInfo.away.id, matchInfo.away.name]
+          'INSERT INTO teams (team_id, team, sport_type, nation) VALUES ($1, $2, $3, $4) ON CONFLICT (team_id) DO NOTHING',
+          [matchInfo.away.id, matchInfo.away.name, 'soccer', 'italy']
         );
       }
 
