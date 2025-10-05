@@ -60,7 +60,7 @@ export const getExistingMatchIds = async () => {
   }
 };
 
-export const insertMatchesBatch = async (matchesData, seasonYear = null) => {
+export const insertMatchesBatch = async (matchesData, seasonYear = null, baseUrl = '') => {
   const pool = getDatabasePool();
   
   if (!matchesData || Object.keys(matchesData).length === 0) {
@@ -136,7 +136,8 @@ export const insertMatchesBatch = async (matchesData, seasonYear = null) => {
 
       const homeScore = matchInfo.result?.home ? parseInt(matchInfo.result.home) : null;
       const awayScore = matchInfo.result?.away ? parseInt(matchInfo.result.away) : null;
-      const season = seasonYear || extractSeasonFromData(matchInfo);
+      const matchUrl = matchInfo.match_link || `${baseUrl}/match/${matchId}/`;
+      const season = seasonYear || extractSeasonFromData(matchInfo, matchUrl);
 
       await pool.query(insertMatchQuery, [
         matchId,
@@ -167,9 +168,24 @@ export const insertMatchesBatch = async (matchesData, seasonYear = null) => {
   return results;
 };
 
-const extractSeasonFromData = (matchInfo) => {
-  // matchInfo에서 시즌 정보 추출 로직
-  // stage 정보에서 시즌 추출 시도
+const extractSeasonFromData = (matchInfo, matchUrl = null) => {
+  // URL에서 시즌 추출 시도 (우선순위 1)
+  if (matchUrl) {
+    const seasonMatch = matchUrl.match(/(\d{4}-\d{4})/);
+    if (seasonMatch) {
+      return seasonMatch[1];
+    }
+  }
+  
+  // match_link에서 시즌 추출 시도 (우선순위 2)
+  if (matchInfo.match_link) {
+    const seasonMatch = matchInfo.match_link.match(/(\d{4}-\d{4})/);
+    if (seasonMatch) {
+      return seasonMatch[1];
+    }
+  }
+  
+  // stage 정보에서 시즌 추출 시도 (우선순위 3)
   if (matchInfo.stage && matchInfo.stage.includes('2025-2026')) {
     return '2025-2026';
   }
