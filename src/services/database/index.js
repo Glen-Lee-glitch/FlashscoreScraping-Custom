@@ -60,7 +60,7 @@ export const getExistingMatchIds = async () => {
   }
 };
 
-export const insertMatchesBatch = async (matchesData) => {
+export const insertMatchesBatch = async (matchesData, seasonYear = null) => {
   const pool = getDatabasePool();
   
   if (!matchesData || Object.keys(matchesData).length === 0) {
@@ -136,7 +136,7 @@ export const insertMatchesBatch = async (matchesData) => {
 
       const homeScore = matchInfo.result?.home ? parseInt(matchInfo.result.home) : null;
       const awayScore = matchInfo.result?.away ? parseInt(matchInfo.result.away) : null;
-      const season = extractSeasonFromData(matchInfo);
+      const season = seasonYear || extractSeasonFromData(matchInfo);
 
       await pool.query(insertMatchQuery, [
         matchId,
@@ -169,6 +169,14 @@ export const insertMatchesBatch = async (matchesData) => {
 
 const extractSeasonFromData = (matchInfo) => {
   // matchInfo에서 시즌 정보 추출 로직
+  // stage 정보에서 시즌 추출 시도
+  if (matchInfo.stage && matchInfo.stage.includes('2025-2026')) {
+    return '2025-2026';
+  }
+  if (matchInfo.stage && matchInfo.stage.includes('2024-2025')) {
+    return '2024-2025';
+  }
+  
   // 기본적으로 현재 년도 기반으로 계산
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;

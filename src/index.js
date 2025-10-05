@@ -322,7 +322,7 @@ const forceKillBrowser = async (browser) => {
           
           // 10개 경기마다 데이터베이스에 자동 삽입
           console.log(`\n💾 ${currentIndex}개 경기 완료. 데이터베이스에 배치 삽입 시작...`);
-          const batchResult = await insertMatchesBatch(matchData);
+          const batchResult = await insertMatchesBatch(matchData, seasonYear);
           console.log(`✅ 배치 삽입 완료: 성공 ${batchResult.success}개, 실패 ${batchResult.errors.length}개`);
           
           // 삽입 완료 후 matchData 초기화 (메모리 절약)
@@ -397,7 +397,7 @@ const forceKillBrowser = async (browser) => {
   if (Object.keys(matchData).length > 0) {
     console.log(`\n💾 마지막 ${Object.keys(matchData).length}개 경기를 데이터베이스에 삽입...`);
     try {
-      const finalBatchResult = await insertMatchesBatch(matchData);
+      const finalBatchResult = await insertMatchesBatch(matchData, seasonYear);
       console.log(`✅ 최종 배치 삽입 완료: 성공 ${finalBatchResult.success}개, 실패 ${finalBatchResult.errors.length}개`);
     } catch (error) {
       console.log(`⚠️ 최종 배치 삽입 실패: ${error.message}`);
