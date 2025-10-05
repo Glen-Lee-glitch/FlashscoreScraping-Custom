@@ -188,6 +188,31 @@ const extractSeasonFromData = (matchInfo) => {
   }
 };
 
+export const logMatchError = async (matchId, errorType, errorMessage, errorDetails = null, matchUrl = null, stage = null) => {
+  const pool = getDatabasePool();
+  
+  try {
+    await pool.query(`
+      INSERT INTO matches_error (
+        match_id, error_type, error_message, error_details, 
+        match_url, stage, attempted_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      ON CONFLICT DO NOTHING
+    `, [
+      matchId, 
+      errorType, 
+      errorMessage, 
+      errorDetails ? JSON.stringify(errorDetails) : null,
+      matchUrl,
+      stage
+    ]);
+    
+    console.log(`📝 오류 기록: ${matchId} - ${errorType}: ${errorMessage}`);
+  } catch (error) {
+    console.error(`❌ 오류 기록 실패 (${matchId}): ${error.message}`);
+  }
+};
+
 export const closeDatabase = async () => {
   if (pool) {
     await pool.end();

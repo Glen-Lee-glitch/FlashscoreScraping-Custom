@@ -13,7 +13,7 @@ import { start, stop } from './cli/loader/index.js';
 import { initializeProgressbar } from './cli/progressbar/index.js';
 
 import { getMatchIdList, getMatchData } from './scraper/services/matches/index.js';
-import { initializeDatabase, getExistingMatchIds, checkMatchExists, insertMatchesBatch, closeDatabase } from './services/database/index.js';
+import { initializeDatabase, getExistingMatchIds, checkMatchExists, insertMatchesBatch, logMatchError, closeDatabase } from './services/database/index.js';
 
 import { handleFileType } from './files/handle/index.js';
 import { exec } from 'child_process';
@@ -301,8 +301,59 @@ const forceKillBrowser = async (browser) => {
         continue;
       }
 
-      matchData[matchId] = await getMatchData(browser, matchId);
-      handleFileType(matchData, fileType, fileName);
+      // 매치 데이터 스크래핑 시도
+      const matchUrl = `${BASE_URL}/match/${matchId}/`;
+      let matchInfo;
+      
+      try {
+        matchInfo = await getMatchData(browser, matchId);
+        matchData[matchId] = matchInfo;
+        handleFileType(matchData, fileType, fileName);
+        
+        // 데이터 검증
+        if (!matchInfo.home || !matchInfo.away || !matchInfo.home.id || !matchInfo.away.id) {
+          await logMatchError(
+            matchId, 
+            'data_validation_error', 
+            '팀 정보 누락 (home/away team data missing)', 
+            { home: matchInfo.home, away: matchInfo.away },
+            matchUrl,
+            matchInfo.stage
+          );
+          console.log(`⚠️ 매치 ${matchId} 팀 정보 누락, 건너뛰기...`);
+          currentIndex++;
+          progressbar.increment();
+          continue;
+        }
+        
+        if (!matchInfo.date) {
+          await logMatchError(
+            matchId, 
+            'data_validation_error', 
+            '경기 날짜 누락', 
+            { date: matchInfo.date },
+            matchUrl,
+            matchInfo.stage
+          );
+          console.log(`⚠️ 매치 ${matchId} 날짜 정보 누락, 건너뛰기...`);
+          currentIndex++;
+          progressbar.increment();
+          continue;
+        }
+        
+      } catch (scrapingError) {
+        await logMatchError(
+          matchId, 
+          'scraping_error', 
+          `스크래핑 실패: ${scrapingError.message}`, 
+          { error: scrapingError.stack },
+          matchUrl
+        );
+        console.log(`⚠️ 매치 ${matchId} 스크래핑 실패, 건너뛰기...`);
+        currentIndex++;
+        progressbar.increment();
+        continue;
+      }
       
       // 성공적으로 처리된 경우에만 인덱스 증가
       currentIndex++;
@@ -331,6 +382,17 @@ const forceKillBrowser = async (browser) => {
           
         } catch (error) {
           console.log(`⚠️ 중단점 저장 또는 DB 삽입 실패: ${error.message}`);
+          // 배치 삽입 오류 기록
+          for (const [matchId, matchInfo] of Object.entries(matchData)) {
+            await logMatchError(
+              matchId,
+              'insertion_error',
+              `배치 삽입 실패: ${error.message}`,
+              { batchError: error.stack, matchInfo: matchInfo },
+              `${BASE_URL}/match/${matchId}/`,
+              matchInfo?.stage
+            );
+          }
         }
       }
       
@@ -401,6 +463,17 @@ const forceKillBrowser = async (browser) => {
       console.log(`✅ 최종 배치 삽입 완료: 성공 ${finalBatchResult.success}개, 실패 ${finalBatchResult.errors.length}개`);
     } catch (error) {
       console.log(`⚠️ 최종 배치 삽입 실패: ${error.message}`);
+      // 최종 배치 삽입 오류 기록
+      for (const [matchId, matchInfo] of Object.entries(matchData)) {
+        await logMatchError(
+          matchId,
+          'insertion_error',
+          `최종 배치 삽입 실패: ${error.message}`,
+          { finalBatchError: error.stack, matchInfo: matchInfo },
+          `${BASE_URL}/match/${matchId}/`,
+          matchInfo?.stage
+        );
+      }
     }
   }
 
