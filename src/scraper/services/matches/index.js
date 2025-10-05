@@ -51,8 +51,12 @@ export const getMatchData = async (browser, matchId) => {
     const page = await openPageAndNavigate(browser, `${BASE_URL}/match/${matchId}/#/match-summary/match-summary`);
 
     // 동적 로딩을 위해 더 긴 대기 시간 추가
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
     await waitForSelectorSafe(page, '.duelParticipant__startTime');
+    
+    // 이벤트 데이터 로딩을 위한 추가 대기
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    await waitForSelectorSafe(page, '.loadable.complete', 5000);
 
     // 현재 URL에서 팀 ID 추출
     const pageUrl = page.url();
@@ -323,6 +327,16 @@ const extractMatchData = async (page, teamIds) => {
       }
     } catch (error) {
       console.log('[BROWSER] 경기 이벤트 추출 실패:', error.message);
+    }
+    
+    // 디버깅: 요소 0 존재 여부 확인
+    const loadableCompleteElements = document.querySelectorAll('.loadable.complete');
+    console.log(`[BROWSER] loadable complete 요소 개수: ${loadableCompleteElements.length}`);
+    if (loadableCompleteElements.length > 0) {
+      const firstElement = loadableCompleteElements[0];
+      console.log(`[BROWSER] 첫 번째 요소 텍스트: ${firstElement.innerText.substring(0, 200)}`);
+      const smvIncidents = firstElement.querySelectorAll('.smv__incident');
+      console.log(`[BROWSER] smv__incident 요소 개수: ${smvIncidents.length}`);
     }
 
     return {
