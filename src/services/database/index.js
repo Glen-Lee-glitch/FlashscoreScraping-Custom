@@ -60,7 +60,7 @@ export const getExistingMatchIds = async () => {
   }
 };
 
-export const insertMatchesBatch = async (matchesData, seasonYear = null, baseUrl = '') => {
+export const insertMatchesBatch = async (matchesData, seasonYear = null, baseUrl = '', countryCode = '', leagueCode = '') => {
   const pool = getDatabasePool();
   
   if (!matchesData || Object.keys(matchesData).length === 0) {
@@ -122,13 +122,16 @@ export const insertMatchesBatch = async (matchesData, seasonYear = null, baseUrl
         INSERT INTO matches (
           id, match_link, match_time, status, 
           home_team_id, away_team_id, home_score, away_score, 
-          season, best_benchmark, best_over_odds, best_under_odds
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          season, nation, league, best_benchmark, best_over_odds, best_under_odds
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         ON CONFLICT (id) DO UPDATE SET
           match_link = EXCLUDED.match_link,
           status = EXCLUDED.status,
           home_score = EXCLUDED.home_score,
           away_score = EXCLUDED.away_score,
+          season = EXCLUDED.season,
+          nation = EXCLUDED.nation,
+          league = EXCLUDED.league,
           best_benchmark = EXCLUDED.best_benchmark,
           best_over_odds = EXCLUDED.best_over_odds,
           best_under_odds = EXCLUDED.best_under_odds
@@ -149,6 +152,8 @@ export const insertMatchesBatch = async (matchesData, seasonYear = null, baseUrl
         homeScore,
         awayScore,
         season,
+        countryCode,
+        leagueCode,
         bestBenchmark,
         bestOverOdds,
         bestUnderOdds
