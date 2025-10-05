@@ -137,7 +137,7 @@ export const insertMatchesBatch = async (matchesData, seasonYear = null, baseUrl
       const homeScore = matchInfo.result?.home ? parseInt(matchInfo.result.home) : null;
       const awayScore = matchInfo.result?.away ? parseInt(matchInfo.result.away) : null;
       const matchUrl = matchInfo.match_link || `${baseUrl}/match/${matchId}/`;
-      const season = seasonYear || extractSeasonFromData(matchInfo, matchUrl);
+      const season = extractSeasonFromData(matchInfo, matchUrl) || seasonYear;
 
       await pool.query(insertMatchQuery, [
         matchId,
