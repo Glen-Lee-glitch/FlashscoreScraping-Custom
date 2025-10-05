@@ -3,8 +3,10 @@
 
 -- 1. teams 테이블 (팀 정보)
 CREATE TABLE teams (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
+    team_id TEXT PRIMARY KEY,
+    team TEXT NOT NULL,
+    sport_type TEXT DEFAULT 'soccer',
+    nation TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -14,8 +16,8 @@ CREATE TABLE matches (
     match_link TEXT,
     match_time TIMESTAMPTZ NOT NULL,
     status TEXT,
-    home_team_id TEXT REFERENCES teams(id),
-    away_team_id TEXT REFERENCES teams(id),
+    home_team_id TEXT REFERENCES teams(team_id),
+    away_team_id TEXT REFERENCES teams(team_id),
     home_score SMALLINT,
     away_score SMALLINT,
     season TEXT,
