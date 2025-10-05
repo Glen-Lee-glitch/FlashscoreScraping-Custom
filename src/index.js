@@ -116,6 +116,10 @@ const forceKillBrowser = async (browser) => {
     // 프랑스
     'ligue-1': 'ligue-1',
     'ligue-2': 'ligue-2',
+    'national': 'national',
+    'national-2-group-a': 'national-2-group-a',
+    'national-2-group-b': 'national-2-group-b',
+    'national-2-group-c': 'national-2-group-c',
     
     // 체코
     'chance-liga': 'chance-liga',
