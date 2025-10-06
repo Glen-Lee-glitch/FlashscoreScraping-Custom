@@ -108,12 +108,33 @@ export const insertMatchesBatch = async (matchesData, seasonYear = null, baseUrl
       
       if (matchInfo.odds?.['over-under']) {
         const overUnderOdds = matchInfo.odds['over-under'];
-        // 2.5 기준점 찾기 (가장 일반적)
-        const benchmark25 = overUnderOdds.find(odds => odds.handicap === '2.5' || odds.handicap === '2,5');
-        if (benchmark25 && benchmark25.average) {
-          bestBenchmark = parseFloat(benchmark25.average.over) > parseFloat(benchmark25.average.under) ? 2.5 : 2.5;
-          bestOverOdds = benchmark25.average.over;
-          bestUnderOdds = benchmark25.average.under;
+        
+        // 1. 오버-언더 차이의 절댓값이 가장 작은 기준점 찾기
+        // 2. 같은 절댓값이면 오버배당률이 더 높은 것 선택
+        let bestHandicap = null;
+        let minDifference = Infinity;
+        let maxOverOdds = 0;
+        
+        overUnderOdds.forEach(odds => {
+          if (odds.average && odds.average.over && odds.average.under) {
+            const overOdds = parseFloat(odds.average.over);
+            const underOdds = parseFloat(odds.average.under);
+            const difference = Math.abs(overOdds - underOdds);
+            
+            // 차이가 더 작거나, 같은 차이면 오버배당률이 더 높은 경우 선택
+            if (difference < minDifference || 
+                (difference === minDifference && overOdds > maxOverOdds)) {
+              minDifference = difference;
+              maxOverOdds = overOdds;
+              bestHandicap = odds;
+            }
+          }
+        });
+        
+        if (bestHandicap) {
+          bestBenchmark = parseFloat(bestHandicap.handicap.replace(',', '.'));
+          bestOverOdds = bestHandicap.average.over;
+          bestUnderOdds = bestHandicap.average.under;
         }
       }
 
