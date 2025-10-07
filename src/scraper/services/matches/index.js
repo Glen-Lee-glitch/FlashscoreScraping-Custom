@@ -227,6 +227,8 @@ const extractMatchData = async (page, teamIds) => {
               incidentInfo.eventType = '카드';
             } else if (iconHTML.includes('wcl-icon-incidents-penalty-missed')) {
               incidentInfo.eventType = '페널티실축';
+            } else if (iconHTML.includes('class="var"') || iconHTML.includes('#var')) {
+              incidentInfo.eventType = 'VAR';
             }
           }
           
@@ -240,6 +242,8 @@ const extractMatchData = async (page, teamIds) => {
               incidentInfo.eventType = '카드';
             } else if (text.includes('페널티실축') || text.includes('Penalty Missed')) {
               incidentInfo.eventType = '페널티실축';
+            } else if (text.includes('노골') || text.includes('VAR') || text.includes('No Goal')) {
+              incidentInfo.eventType = 'VAR';
             }
           }
           
