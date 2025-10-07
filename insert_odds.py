@@ -116,6 +116,16 @@ def insert_odds_from_json(json_file_path, odds_method='average', batch_size=100)
         print(f"🎯 배당률 선택 방법: {odds_method}")
         print(f"🔄 배치 크기: {batch_size}개 경기씩 처리")
         
+        # matches 테이블에 존재하는 match_id들을 한 번에 확인 (성능 최적화)
+        print(f"🔍 matches 테이블에서 경기 ID 확인 중...")
+        all_match_ids = list(data.keys())
+        cursor.execute(
+            "SELECT id FROM matches WHERE id = ANY(%s)",
+            (all_match_ids,)
+        )
+        existing_match_ids = set(row[0] for row in cursor.fetchall())
+        print(f"✅ {len(existing_match_ids)}/{len(all_match_ids)}개 경기가 matches 테이블에 존재")
+        
         # 배치 단위로 데이터 준비
         metadata_batch = []
         handicap_batch = []
@@ -125,6 +135,11 @@ def insert_odds_from_json(json_file_path, odds_method='average', batch_size=100)
         
         for match_id, match_data in data.items():
             try:
+                # matches 테이블에 존재하는지 확인
+                if match_id not in existing_match_ids:
+                    skipped_matches += 1
+                    continue
+                
                 # odds 데이터 확인
                 if 'odds' not in match_data or match_data['odds'] is None or 'over-under' not in match_data['odds']:
                     skipped_matches += 1
@@ -204,6 +219,11 @@ def insert_odds_from_json(json_file_path, odds_method='average', batch_size=100)
         print(f"  ✅ 처리된 경기: {processed_matches}개")
         print(f"  📈 삽입된 핸디캡: {inserted_handicaps}개")
         print(f"  ⚠️ 스킵된 경기: {skipped_matches}개")
+        
+        # matches 테이블에 없는 경기 개수
+        missing_matches = len(all_match_ids) - len(existing_match_ids)
+        if missing_matches > 0:
+            print(f"  ℹ️ matches 테이블에 없는 경기: {missing_matches}개 (먼저 insert_matches.py 실행 필요)")
         
         return True
         
