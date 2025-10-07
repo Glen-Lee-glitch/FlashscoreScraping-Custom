@@ -217,12 +217,16 @@ const extractMatchData = async (page, teamIds) => {
           const iconElement = incident.querySelector('.smv__incidentIcon, .smv__incidentIconSub');
           if (iconElement) {
             const iconHTML = iconElement.innerHTML;
-            if (iconHTML.includes('wcl-icon-soccer') || iconHTML.includes('Goal')) {
+            if (iconHTML.includes('wcl-icon-soccer') || 
+                iconHTML.includes('Goal') || 
+                iconHTML.includes('wcl-icon-incidents-penalty-goal')) {
               incidentInfo.eventType = '골';
             } else if (iconHTML.includes('substitution')) {
               incidentInfo.eventType = '교체';
             } else if (iconHTML.includes('card-ico') || iconHTML.includes('Yellow Card') || iconHTML.includes('Red Card')) {
               incidentInfo.eventType = '카드';
+            } else if (iconHTML.includes('wcl-icon-incidents-penalty-missed')) {
+              incidentInfo.eventType = '페널티실축';
             }
           }
           
@@ -234,6 +238,8 @@ const extractMatchData = async (page, teamIds) => {
               incidentInfo.eventType = '교체';
             } else if (text.includes('카드') || text.includes('Card')) {
               incidentInfo.eventType = '카드';
+            } else if (text.includes('페널티실축') || text.includes('Penalty Missed')) {
+              incidentInfo.eventType = '페널티실축';
             }
           }
           
