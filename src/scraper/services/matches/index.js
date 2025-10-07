@@ -217,7 +217,10 @@ const extractMatchData = async (page, teamIds) => {
           const iconElement = incident.querySelector('.smv__incidentIcon, .smv__incidentIconSub');
           if (iconElement) {
             const iconHTML = iconElement.innerHTML;
-            if (iconHTML.includes('wcl-icon-soccer') || 
+            // 자책골 먼저 확인 (골보다 우선)
+            if (iconHTML.includes('footballOwnGoal-ico') || iconHTML.includes('자책골') || iconHTML.includes('Own Goal')) {
+              incidentInfo.eventType = '자책골';
+            } else if (iconHTML.includes('wcl-icon-soccer') || 
                 iconHTML.includes('Goal') || 
                 iconHTML.includes('wcl-icon-incidents-penalty-goal')) {
               incidentInfo.eventType = '골';
@@ -234,7 +237,10 @@ const extractMatchData = async (page, teamIds) => {
           
           // 텍스트 기반 백업 분류
           if (incidentInfo.eventType === '기타') {
-            if (text.includes('골') || text.includes('Goal')) {
+            // 자책골 먼저 확인 (골보다 우선)
+            if (text.includes('자책골') || text.includes('Own Goal') || text.includes('own goal')) {
+              incidentInfo.eventType = '자책골';
+            } else if (text.includes('골') || text.includes('Goal')) {
               incidentInfo.eventType = '골';
             } else if (text.includes('교체') || text.includes('Substitution')) {
               incidentInfo.eventType = '교체';
